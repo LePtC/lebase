@@ -1,10 +1,15 @@
-# encoding=utf-8
+# -*- coding: utf-8 -*-
 """
 Level 0.5（可被 lebase.times 引用）
 times 更高阶，因此 ensure_taskId 放在 times
 """
 import math
 import io
+
+
+# ----------------------------
+# ensure系列
+# ----------------------------
 
 
 def ensure_str(s):
@@ -84,6 +89,21 @@ def ensure_quoted(path):
     if not (path.startswith('"') and path.endswith('"')):
         return f'"{path}"'  # 添加引号
     return path  # 已有引号，直接返回
+
+
+# ----------------------------
+# safe系列
+# ----------------------------
+
+def is_convertible_to_int(value):
+    return isinstance(value, (int, float)) and not math.isnan(value) and math.isfinite(value)
+
+
+def safe_str_int(value):
+    try:
+        return str(int(value))
+    except (ValueError, TypeError, OverflowError):
+        return str(value)
 
 
 if __name__ == "__main__":

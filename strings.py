@@ -1,13 +1,17 @@
-# encoding=utf-8
+# -*- coding: utf-8 -*-
 """
 Level 0.5（可被 lebase.times 引用）
 str开头的接口都是返回string
 """
 import re
 import sys
-
 from urllib import parse
-from lebase.ensure import ensure_str
+
+import tldextract
+from bs4 import BeautifulSoup
+
+from lebase.log import log
+from lebase.safes import ensure_str
 
 
 def mma_replace(s: str, rule: dict):
@@ -51,8 +55,137 @@ def str_maxlen(txt, maxlen=60):
         return txt
 
 
-def strlog(txt):
-    return str_maxlen(non_cn_encode(ensure_str(txt)))
+def strlog(txt, maxlen=60):
+    return str_maxlen(non_cn_encode(ensure_str(txt)), maxlen)
+
+
+# ----------------------------
+# filters
+# ----------------------------
+
+def trim_tail(s, t):
+    if s.endswith(t):
+        return s[: -len(t)]
+    else:
+        return s
+
+
+def filt_nonchar(sentence):
+    """
+    过滤非中英文和数字
+    cite: https://blog.csdn.net/keyue123/article/details/96436131
+    """
+    # 方法一 re.sub('[^\w\u4e00-\u9fff]+', '', sentence)
+    # 方法二
+    return re.sub("[^\u4e00-\u9fa5^a-z^A-Z^0-9]", "", sentence)
+
+
+def filt_non_cn(sentence):
+    return re.sub(
+        "[^ -~^\\u4e00-\\u9fa5^，^。^？^！^、^；^：^“^”（^）^《^》^〈^〉^【^】^『^』^「^」^﹃^﹄^〔^〕]",
+        "",
+        sentence,
+    )
+
+
+def filt_blank(s, rule=["\n", "\r", "\t", " ", "&nbsp;"]):
+    """
+    清除全部空格和换行符
+    """
+    return mma_replace(ensure_str(s).strip(), {x: "" for x in rule})
+
+
+def filt_dupblank(text):
+    """
+    清除连续重复的空格和换行符
+    """
+    return re.sub(" +", " ", re.sub("\n+", "\n\n", text))
+
+
+def filt_htmltag(html_str):
+    """cite: https://stackoverflow.com/questions/753052/strip-html-from-strings-in-python
+    比 filt_tag 更准确，但不知道是否性能慢些？
+    """
+    soup = BeautifulSoup(html_str, features="lxml")
+    return soup.get_text()
+
+
+def filt_tag(raw_html):
+    """https://www.codegrepper.com/code-examples/html/regex+to+remove+html+tags+python"""
+    cleanr = re.compile("<.*?>")
+    cleantext = re.sub(cleanr, "", raw_html)
+    return cleantext
+
+
+def filt_base64(html_str):
+    """给makemid存html时节省空间用"""
+    return re.sub('<img src="data:image/png;base64,[^>]*>', "", html_str)
+
+
+def filt_js(html_str):
+    """给makemid存html时节省空间用"""
+    return re.sub("<script[^<]*</script>", "", html_str)
+
+
+def filt_weixintag(text):
+    """
+    微信文章特色标记处理
+    """
+    ret = text.replace("/ Unsplash", "\n").replace("/Unsplash", "\n")
+    ret = ret.replace("/图虫创意", "\n图\n")
+    return ret
+
+
+def filt_null_element(liStr):
+    return [x for x in liStr if x]
+
+
+def sanitize_filename(filename: str) -> str:
+    """
+    传入文件名，检查并返回合法的文件名（默认替换非法字符为换成全角字符）
+    （参考了 DrissionPage 的 save_mht 时的 make_valid_name，只不过去掉非法字符改成替换成全角）
+    :param filename: 原始文件名
+    :return: 处理后的合法文件名
+    """
+    if not filename:
+        log.warn("传入文件名为空")
+        return "未命名"
+
+    # ----------------去除前后空格----------------
+    full_name = filename.strip()
+
+    # ----------------使总长度不大于255个字符（一个汉字是2个字符）----------------
+    if get_len_zh2(full_name) > 253:
+        full_name = full_name[:253]
+
+    # Windows文件名禁止使用的字符
+    forbidden_chars = '<>:"/\\|?*'
+    # 全角字符映射
+    full_width_chars = "＜＞：＂／＼｜？＊"
+    char_mapping = {forb: full for forb, full in zip(forbidden_chars, full_width_chars)}
+
+    # 替换禁止字符为全角字符
+    sanitized = "".join(char_mapping.get(char, char) for char in full_name)
+    # 删除仍然存在的禁止字符
+    sanitized = "".join(char for char in sanitized if char not in forbidden_chars)
+    # 去除开头和结尾的空格和点，防止Windows系统无法识别
+    # sanitized = sanitized.strip().strip('.')
+
+    return sanitized
+
+
+def get_len_zh2(txt):
+    """返回字符串中字符个数（一个汉字是2个字符）
+    :param txt: 字符串
+    :return: 字符个数
+    """
+    txt_len = len(txt)
+    return int((len(txt.encode('utf-8')) - txt_len) / 2 + txt_len)
+
+
+# ----------------------------
+# 打印 list 信息
+# ----------------------------
 
 
 def strli(lst):
@@ -86,7 +219,78 @@ def print_1line(msg):
     sys.stdout.flush()
 
 
+# ----------------------------
+# 各种 parser
+# ----------------------------
+
+# >>> "<h1>swwww<h1>22ddd".split('<h1>')
+# ['', 'swwww', '22ddd']
+def split_by_tag(htm, tag="<h1"):
+    """输入：html长string
+    输出：按<h1.. 分割，全部连起来等于原字符串
+    """
+    li = htm.split(tag)
+    for i in range(1, len(li)):
+        li[i] = tag + li[i]
+    return li
+
+
+def extract_head_txt(txt):
+    """输入html(chapter)，可能以 '<h1 id="' 开头也可能以 p 开头，要求提取不带 tag 的纯文本并控制长度"""
+    # print(txt[:390])
+    # return txt[:16].replace('<h1 id="', '') # 早期做法
+
+    if "</h1>" in txt:
+        headtxt = filt_htmltag(txt.split("</h1>")[0])
+    else:
+        headtxt = filt_htmltag(txt)
+
+    return headtxt[: min([10, len(headtxt)])]
+
+
+def parse_numbers(input_string: str) -> list:
+    """
+    从输入字符串中提取所有连续数字序列，并以 int 列表形式返回。
+
+    参数:
+    input_string (str): 含有数字和其它字符的字符串
+
+    返回:
+    list[int]: 提取到的所有数字序列（整型列表）
+    """
+    # \d+ 表示匹配一个或多个连续数字
+    digit_strings = re.findall(r"\d+", input_string)
+    return list(map(int, digit_strings))
+
+
+def parse_urls(text: str) -> list:
+    """
+    传入一个包含文本的字符串，从中提取所有形式的URL，返回它们组成的列表。
+    """
+    # 简单可行的匹配模式示例：
+    # 1. 支持以 http:// 或 https:// 开头
+    # 2. 支持以 ftp:// 开头
+    # 3. 支持以 www. 开头
+    # [^\s] 匹配除空白字符（空格、换行等）之外的所有字符，以尽量捕获完整的URL
+    pattern = r"(?:https?://|ftp://|www\.)[^\s]+"
+
+    return re.findall(pattern, text)
+
+
+def get_main_domain(url):
+    ext = tldextract.extract(url)
+    if ext.registered_domain:
+        return ext.registered_domain
+    elif ext.suffix:
+        return f"{ext.domain}.{ext.suffix}"
+    else:
+        return ext.domain
+
+
 if __name__ == "__main__":
+
+    # test_print_list
+
     import time
 
     # 示例使用
@@ -94,5 +298,23 @@ if __name__ == "__main__":
     for n in length:
         print_1line(strli(list(range(n))))
         time.sleep(1)
+
+    # test_mid_parser
+    # upsString = """
+    #     UID303266889
+    # UID3546816515672666
+    # UID3546713662950281
+    # UID227346677
+    # UID1040675491
+    # UID3546836109363304
+    # UID:1040675491
+    # UID:434712824
+    # """
+    # result = parse_numbers(upsString)
+    # print(result)
+    # 结果示例:
+    # ['303266889', '3546816515672666', '3546713662950281',
+    #  '227346677', '1040675491', '3546836109363304',
+    #  '1040675491', '434712824']
 
     pass
