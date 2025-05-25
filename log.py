@@ -9,7 +9,8 @@ lefac 的主要配置信息都存放在 appdata/lefac 目录（对 win 和 linux
 lefac 有一个 nosync 目录，统一位于 downloads/nosync（PC 和云服务器都是），主要用来保管本机 log，不会和其它任何节点同步
 对于 PC（lefac 不在 dowloads 下），还会有一个位于 Q/pcsync，用来存放体积大的不想和云同步（但会和其它 PC 同步）的文件（例如 bykzip 和 bykfin）
 
-prompt2
+250525 prompt2：
+
 下面是一个python项目底层所使用的log模块，作用是在打印的同时也将日志写入到文件中，文件名取决于入口py文件名和当前的日期。
 目前发现存在一个问题：当程序启动后，文件名会被锁定在当前日期的文件名上，即使程序持续运行了很多天，输出到的日志文件名日期仍然保持不变。
 请你帮我改进一下这个模块，实现当程序运行到新的日期后，自动写往新的日期命名的日志文件。
@@ -86,10 +87,11 @@ def get_log_filename(_path):
 
 # 获取调起Python程序的__main__文件的文件名
 main_file_name = get_log_filename(os.path.abspath(sys.argv[0]))
-current_date = datetime.now().strftime("%y%m%d")
+# current_date = datetime.now().strftime("%y%m%d")  # 不再提前生成一次性日期字符串
 log_dir = os.path.join(os.path.expanduser("~"), "downloads", "nosync", "log")
 os.makedirs(log_dir, exist_ok=True)
-log_file_path = os.path.join(log_dir, f"{main_file_name}.{current_date}.log")
+# log_file_path = os.path.join(log_dir, f"{main_file_name}.{current_date}.log")
+log_file_tpl = os.path.join(log_dir, f"{main_file_name}.{{time:YYMMDD}}.log")
 
 
 # 移除 loguru 默认处理器
@@ -125,14 +127,13 @@ def short_filter(record):
 
 logger.add(sys.stderr, format=custom_format, level="DEBUG", colorize=True, filter=default_filter)
 # logger.add(log_file_path, format="", level="INFO", serialize=True)  # 有 serialize 了就去掉 text 字段的记录
-logger.add(
-    log_file_path, format=custom_format, level="INFO", serialize=False, filter=default_filter
-)  # serialize 有点信息过于丰富…
+logger.add(log_file_tpl, rotation="00:00", enqueue=True, format=custom_format, level="INFO", serialize=False, filter=default_filter)
+# serialize 有点信息过于丰富…
 
 
 # 添加使用 short_format 的处理器（输出到屏幕和日志文件）
 logger.add(sys.stderr, format=short_format, level="DEBUG", colorize=True, filter=short_filter)
-logger.add(log_file_path, format=short_format, level="INFO", serialize=False, filter=short_filter)
+logger.add(log_file_tpl, rotation="00:00", enqueue=True, format=short_format, level="INFO", serialize=False, filter=short_filter)
 
 
 # 添加 warn 方法作为 warning 的别名
@@ -161,6 +162,7 @@ log0.warn = log0.warning
 # ----------------------------
 # css utils
 # ----------------------------
+
 
 def bool_color(flag: bool) -> str:
     """将布尔值转换为带 ANSI 颜色的字符串。``True`` 为绿色，``False`` 为红色。"""
