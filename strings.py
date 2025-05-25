@@ -5,6 +5,7 @@ str开头的接口都是返回string
 """
 import re
 import sys
+import unicodedata
 from urllib import parse
 
 import tldextract
@@ -57,6 +58,33 @@ def str_maxlen(txt, maxlen=60):
 
 def strlog(txt, maxlen=60):
     return str_maxlen(non_cn_encode(ensure_str(txt)), maxlen)
+
+
+def strpad(anyInput, target_width=16):
+    """
+    根据字符宽度（全角字符计2，半角字符计1）计算字符串宽度，
+    若不足 target_width，则在末尾补充空格直到达到 target_width。
+
+    参数:
+      s: 输入字符串
+      target_width: 目标宽度，默认为16
+
+    返回:
+      补齐空格后的字符串
+    """
+    current_width = 0
+    s = str(anyInput)
+    for ch in s:
+        # 如果字符为全角或宽字符，则计宽度2，否则计1
+        if unicodedata.east_asian_width(ch) in ('F', 'W'):
+            current_width += 2
+        else:
+            current_width += 1
+
+    # 如果宽度不足，补足空格
+    if current_width < target_width:
+        s += ' ' * (target_width - current_width)
+    return s
 
 
 # ----------------------------

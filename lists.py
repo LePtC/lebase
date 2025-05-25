@@ -105,10 +105,36 @@ def table2html(li2d):
     return s
 
 
+def compare(standard_list, compare_list):
+    """
+    比较两个列表，返回compare_list中相对于standard_list的多余和缺少的元素（均按从小到大排序）。
+
+    参数：
+        standard_list (list): 标准列表
+        compare_list (list): 待比较列表
+
+    返回：
+        tuple: (extra, missing)
+            extra: 在compare_list中但不在standard_list中的元素，按从小到大排序。
+            missing: 在standard_list中但不在compare_list中的元素，按从小到大排序。
+    """
+    # 使用集合求差集，再转成列表排序
+    extra = sorted(list(set(compare_list) - set(standard_list)))
+    missing = sorted(list(set(standard_list) - set(compare_list)))
+
+    return extra, missing
+
+
 if __name__ == "__main__":
 
     # ----------------------------
     # 测试
     # ----------------------------
+
+    standard = [1, 2, 3, 4, 5]
+    compareli = [2, 3, 4, 6, 7]
+    extra, missing = compare(standard, compareli)
+    print("多余的元素:", extra)  # 输出: [6, 7]
+    print("缺少的元素:", missing)  # 输出: [1, 5]
 
     pass

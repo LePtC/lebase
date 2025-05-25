@@ -96,7 +96,11 @@ def ensure_quoted(path):
 # ----------------------------
 
 def is_convertible_to_int(value):
-    return isinstance(value, (int, float)) and not math.isnan(value) and math.isfinite(value)
+    try:
+        test = int(value)
+        return isinstance(test, (int, float)) and not math.isnan(test) and math.isfinite(test)
+    except Exception:
+        return False
 
 
 def safe_str_int(value):

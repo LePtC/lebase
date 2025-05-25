@@ -40,6 +40,7 @@ def count_elements(one_d_list):
 
 def get_dic_path(dic, path):
     """
+    举例：
     mypath = ["data", "cursor", "all_count"]
     mypath = ["data", "replies", 1, "like"]
     mypath = ["data", "replies", 1, "content", "message"]

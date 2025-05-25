@@ -8,6 +8,12 @@ lefac 项目统一使用这样的接口：from lebase.log import log，然后函
 lefac 的主要配置信息都存放在 appdata/lefac 目录（对 win 和 linux 都适用）
 lefac 有一个 nosync 目录，统一位于 downloads/nosync（PC 和云服务器都是），主要用来保管本机 log，不会和其它任何节点同步
 对于 PC（lefac 不在 dowloads 下），还会有一个位于 Q/pcsync，用来存放体积大的不想和云同步（但会和其它 PC 同步）的文件（例如 bykzip 和 bykfin）
+
+prompt2
+下面是一个python项目底层所使用的log模块，作用是在打印的同时也将日志写入到文件中，文件名取决于入口py文件名和当前的日期。
+目前发现存在一个问题：当程序启动后，文件名会被锁定在当前日期的文件名上，即使程序持续运行了很多天，输出到的日志文件名日期仍然保持不变。
+请你帮我改进一下这个模块，实现当程序运行到新的日期后，自动写往新的日期命名的日志文件。
+请你告诉我你是如何理解和分析的，告诉我代码中哪些地方要做什么样的修改，而不要一次性给我所有代码。
 """
 
 import os
@@ -150,6 +156,15 @@ log.warn = log.warning
 # 其它模块可以通过传入 template 参数来使用 short_format 格式
 log0 = set_context(template="short")
 log0.warn = log0.warning
+
+
+# ----------------------------
+# css utils
+# ----------------------------
+
+def bool_color(flag: bool) -> str:
+    """将布尔值转换为带 ANSI 颜色的字符串。``True`` 为绿色，``False`` 为红色。"""
+    return f"\033[32m{flag}\033[39m" if flag else f"\033[31m{flag}\033[39m"
 
 
 if __name__ == "__main__":
