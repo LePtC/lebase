@@ -19,7 +19,6 @@ lefac 有一个 nosync 目录，统一位于 downloads/nosync（PC 和云服务�
 
 import os
 import sys
-from datetime import datetime
 
 from loguru import logger
 
@@ -87,10 +86,9 @@ def get_log_filename(_path):
 
 # 获取调起Python程序的__main__文件的文件名
 main_file_name = get_log_filename(os.path.abspath(sys.argv[0]))
-# current_date = datetime.now().strftime("%y%m%d")  # 不再提前生成一次性日期字符串
 log_dir = os.path.join(os.path.expanduser("~"), "downloads", "nosync", "log")
 os.makedirs(log_dir, exist_ok=True)
-# log_file_path = os.path.join(log_dir, f"{main_file_name}.{current_date}.log")
+# current_date = datetime.now().strftime("%y%m%d")  # 不再提前生成一次性日期字符串，而是rotate
 log_file_tpl = os.path.join(log_dir, f"{main_file_name}.{{time:YYMMDD}}.log")
 
 
@@ -98,15 +96,14 @@ log_file_tpl = os.path.join(log_dir, f"{main_file_name}.{{time:YYMMDD}}.log")
 logger.remove()
 
 
-# fmt = "<magenta>{time:MM/DD HH:mm:ss}</magenta> <level>{level}\t</level> <cyan>[{file.path}:{line}]</cyan> {function}: <level>{message}</level>"
 def custom_format(record):
     file_path = record["file"].path
     file_name = file_path.split("lefac\\")[-1]
 
     log_format = (
-        f"<magenta>{{time:MM/DD HH:mm:ss}}</magenta> "
+        f"<light-magenta>{{time:MM/DD HH:mm:ss}}</light-magenta> "
         f"<level>{{level}}\t</level> "
-        f"<cyan>[{file_name}:{{line}}]</cyan> "
+        f"<light-cyan>[{file_name}:{{line}}]</light-cyan> "
         f"{{function}}: <level>{{message}}</level>\n"
     )
     return log_format
@@ -126,9 +123,8 @@ def short_filter(record):
 
 
 logger.add(sys.stderr, format=custom_format, level="DEBUG", colorize=True, filter=default_filter)
-# logger.add(log_file_path, format="", level="INFO", serialize=True)  # 有 serialize 了就去掉 text 字段的记录
+# logger.add(log_file_path, format="", level="INFO", serialize=True)  # serialize 有点信息过于丰富…
 logger.add(log_file_tpl, rotation="00:00", enqueue=True, format=custom_format, level="INFO", serialize=False, filter=default_filter)
-# serialize 有点信息过于丰富…
 
 
 # 添加使用 short_format 的处理器（输出到屏幕和日志文件）
