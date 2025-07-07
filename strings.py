@@ -26,6 +26,37 @@ def mma_replace(s: str, rule: dict):
     return s
 
 
+def sizeof_fmt(num, suffix="", digits=1, lower_k=False):
+    """
+    将字节数（或任意数值）转换为可读性更高的字符串表示，自动选择合适的单位（K/M/G/T/P/E/Z/Y）。
+
+    参数：
+        num (float|int)：待转换的数值（如字节数）。
+        suffix (str)：单位后缀，默认为空字符串。
+        digits (int)：小数点保留位数，默认为1。若为0则为整数。
+        lower_k (bool)：是否将K单位小写（如k、M、G...），默认为False（K大写）。
+
+    返回：
+        str：格式化后的字符串，如 '1.2M'、'512K'、'100'。
+
+    示例：
+        sizeof_fmt(1024) -> '1.0K'
+        sizeof_fmt(1024, digits=0) -> '1K'
+        sizeof_fmt(1536, digits=0, lower_k=True) -> '2k'
+        sizeof_fmt(1048576) -> '1.0M'
+    """
+    units = ["", "K", "M", "G", "T", "P", "E", "Z", "Y"]
+    if lower_k:
+        units[1] = "k"
+    for unit in units:
+        if abs(num) < 1024.0:
+            fmt = f"%.{digits}f" if digits > 0 else "%d"
+            return (fmt % num) + unit + suffix
+        num /= 1024.0
+    fmt = f"%.{digits}f" if digits > 0 else "%d"
+    return (fmt % num) + "Y" + suffix
+
+
 regCN = re.compile("[^ -~^\\u4e00-\\u9fa5^，^。^？^！^、^；^：^“^”（^）^《^》^〈^〉^【^】^『^』^「^」^﹃^﹄^〔^〕]")
 
 
@@ -164,10 +195,6 @@ def filt_weixintag(text):
     return ret
 
 
-def filt_null_element(liStr):
-    return [x for x in liStr if x]
-
-
 def sanitize_filename(filename: str) -> str:
     """
     传入文件名，检查并返回合法的文件名（默认替换非法字符为换成全角字符）
@@ -184,7 +211,7 @@ def sanitize_filename(filename: str) -> str:
 
     # ----------------使总长度不大于255个字符（一个汉字是2个字符）----------------
     if get_len_zh2(full_name) > 253:
-        full_name = full_name[:253]
+        full_name = full_name[:253]  # TODO 你这也没除以2啊
 
     # Windows文件名禁止使用的字符
     forbidden_chars = '<>:"/\\|?*'
