@@ -149,7 +149,7 @@ def acquire(name, duration=600, timeout=3600, timeoutStrategy=TimeoutStrategy.RA
                 if lockFile.exists():
                     try:
                         os.remove(lockFile)
-                        log.warn("超时后强制清除锁：{}".format(name))
+                        log.warning("超时后强制清除锁：{}".format(name))
                     except Exception as e:
                         log.error("强制清除锁失败：{}，错误：{}".format(name, e))
                         raise LockAcquisitionTimeoutError("强制清除锁失败: {}".format(name))
@@ -169,7 +169,7 @@ def acquire(name, duration=600, timeout=3600, timeoutStrategy=TimeoutStrategy.RA
             # 锁文件已存在，读取已有的 token 信息
             existingToken = read_token_from_file(lockFile)
             if existingToken is None:
-                log.warn("锁文件存在但读取失败，尝试删除锁文件：{}".format(name))
+                log.warning("锁文件存在但读取失败，尝试删除锁文件：{}".format(name))
                 try:
                     os.remove(lockFile)
                     log.success("删除异常锁文件成功：{}".format(name))
@@ -177,7 +177,7 @@ def acquire(name, duration=600, timeout=3600, timeoutStrategy=TimeoutStrategy.RA
                     log.error("删除锁文件失败：{}，错误：{}".format(name, e))
             else:
                 if is_lock_expired(existingToken):
-                    log.warn("检测到锁已过期，准备删除旧锁：{}".format(existingToken))
+                    log.warning("检测到锁已过期，准备删除旧锁：{}".format(existingToken))
                     try:
                         os.remove(lockFile)
                         log.success("删除过期锁成功：{}".format(name))
@@ -185,7 +185,7 @@ def acquire(name, duration=600, timeout=3600, timeoutStrategy=TimeoutStrategy.RA
                         log.error("删除过期锁失败：{}，错误：{}".format(name, e))
                         # 若删除失败，则继续等待
                 else:
-                    log.warn("锁 {} 当前被占用，token信息：{}".format(name, existingToken))
+                    log.warning("锁 {} 当前被占用，token信息：{}".format(name, existingToken))
         # 每30秒轮询一次
         sleepTime = retry
         remainingTime = timeout - (time.time() - startTime)
@@ -207,7 +207,7 @@ def release(name, token):
     """
     lockFile = get_lock_file_path(name)
     if token == "FORCE":
-        log.warn("使用 FORCE 标识强制释放锁：{}".format(name))
+        log.warning("使用 FORCE 标识强制释放锁：{}".format(name))
         if lockFile.exists():
             try:
                 os.remove(lockFile)

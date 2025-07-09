@@ -144,7 +144,7 @@ class Progress:
         elapsedTime = time.time() - self.startTime
         if exc_type:
             # 如果出现异常，则记录警告日志
-            log.warn(f"任务：{self.msg} 异常终止，用时：{elapsedTime:.1f} s")
+            log.warning(f"任务：{self.msg} 异常终止，用时：{elapsedTime:.1f} s")
         else:
             log.success(f"任务：{self.msg} 成功完成，用时：{elapsedTime:.1f} s")
 
@@ -179,7 +179,7 @@ if __name__ == "__main__":
                         raise ValueError("示例异常")
                     pr.tik(detail=f"任务{i}")
         except Exception as e:
-            log.warn(f"处理过程中出现异常: {e}")
+            log.warning(f"处理过程中出现异常: {e}")
 
     print("===== Demo: 正常流程 =====")
     demo_normal_flow()

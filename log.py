@@ -133,7 +133,7 @@ logger.add(log_file_tpl, rotation="00:00", enqueue=True, format=short_format, le
 
 
 # 添加 warn 方法作为 warning 的别名
-logger.warn = logger.warning
+# logger.warn = logger.warning
 
 
 # 设置额外的上下文信息，用于屏幕输出格式
@@ -148,11 +148,11 @@ def set_context(template="default"):
 
 
 log = set_context()
-log.warn = log.warning
+# log.warn = log.warning
 
 # 其它模块可以通过传入 template 参数来使用 short_format 格式
 log0 = set_context(template="short")
-log0.warn = log0.warning
+# log0.warn = log0.warning
 
 
 # ----------------------------
@@ -186,12 +186,12 @@ if __name__ == "__main__":
 
     test()
     log.warning("Invalid configuration detected.")
-    log.warn("Invalid configuration detected.")
+    log.warning("Invalid configuration detected.")
     log.error("Failed to connect to the database.")
     log.critical("Unexpected system error occurred. Shutting down.")
 
     log0.debug("简易模式 Processing data...")
     log0.info("简易模式 Server started successfully.")
-    log0.warn("简易模式 Invalid configuration detected.")
+    log0.warning("简易模式 Invalid configuration detected.")
     log0.error("简易模式 Failed to connect to the database.")
     log0.critical("简易模式 Unexpected system error occurred. Shutting down.")

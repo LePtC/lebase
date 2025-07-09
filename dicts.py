@@ -118,7 +118,7 @@ def check_useless(inputDict, uselessKeys=[]):
 
     # 根据是否存在额外的键返回结果
     if not extraKeys:
-        log.warn(f"此数据无用: {inputDict}")
+        log.warning(f"此数据无用: {inputDict}")
         return True
     else:
         # log.info("字典有有用键")

@@ -2,7 +2,7 @@
 """
 用途：时间字符串格式转换库
 狸子要处理的时间格式有这几种：unix (float)、str (taskId)、chs（中文时间）、tuple（很少用到）
-app 用到的：taskId（半日爬虫）、fsid（filesystem）、TODO：str2info（笔记农历）
+app 用到的：taskId（半日爬虫）、fsid（filesystem）、str2lunar（笔记农历）
 
 prompt：
 
@@ -55,7 +55,7 @@ UTC2024-07-03T08:15:00Z
 - 代码要求：
     - 代码规范：变量名采用简短明了的小驼峰式命名，函数名则保持`snake_case`风格。
     - 模块化设计：独立的功能尽量抽取为独立的函数，避免将过多功能写在一个函数中。
-    - 日志记录：使用`log.info(string)`、`log.warn(string)`函数进行日志输出（已由 from lebase.log import log 模块提供）。
+    - 日志记录：使用`log.info(string)`、`log.warning(string)`函数进行日志输出（已由 from lebase.log import log 模块提供）。
     - 注释和文档：代码中添加必要的中文注释，提供中文的说明文档。
     - 示例用例：提供各类场景的demo示例，演示程序的使用方法和效果。
     - 尽量使用现成库函数，遵循最佳实践
@@ -128,19 +128,19 @@ def any2unix(timeVar, form=""):
             log.debug("从元组转换为时间戳")
             return float(ts)
         except Exception as e:
-            log.warn("无法将元组转换为时间戳: " + str(e))
+            log.warning("无法将元组转换为时间戳: " + str(e))
             return None
 
     # 4. 字符串类型
     if isinstance(timeVar, str):
         text = timeVar.strip()
         if not text:
-            log.warn("空字符串无法解析")
+            log.warning("空字符串无法解析")
             return None
 
         # log.debug("解析字符串: " + text)
         if form:
-            return str2unix(timeVar, form)
+            return _str2unix(timeVar, form)
 
         # 去除可能的前导 '@'
         if text.startswith("@"):
@@ -158,7 +158,7 @@ def any2unix(timeVar, form=""):
                 log.debug("从 Epoch 格式中解析到时间戳")
                 return candidate
             except Exception as e:
-                log.warn("从 Epoch 格式解析失败: " + str(e))
+                log.warning("从 Epoch 格式解析失败: " + str(e))
 
         # 优先尝试正则匹配数字日期格式
         dt = parse_by_regex(text)
@@ -180,7 +180,7 @@ def any2unix(timeVar, form=""):
                     log.debug("检测到纯数字为秒级时间戳")
                     return candidate
             except Exception as e:
-                log.warn("纯数字转换为时间戳失败: " + str(e))
+                log.warning("纯数字转换为时间戳失败: " + str(e))
 
         # 尝试使用特殊格式解析（覆盖 Day xxx, YYYY-Www-d, 去年的今天, 一周前 等）
         specialDt = parse_special_format(text)
@@ -194,20 +194,20 @@ def any2unix(timeVar, form=""):
             try:
                 dt = dateparser.parse(text, settings={"TIMEZONE": "Asia/Shanghai", "RETURN_AS_TIMEZONE_AWARE": False})
             except Exception as e:
-                log.warn("dateparser 解析异常: " + str(e))
+                log.warning("dateparser 解析异常: " + str(e))
         else:
-            log.warn("未安装 dateparser 库，跳过该解析步骤")
+            log.warning("未安装 dateparser 库，跳过该解析步骤")
 
         # 如果 dateparser 未解析成功，尝试 dateutil.parser
         if not dt and dtParser is not None:
             try:
                 dt = dtParser.parse(text, fuzzy=True)
             except Exception as e:
-                log.warn("dateutil.parser 解析异常: " + str(e))
+                log.warning("dateutil.parser 解析异常: " + str(e))
                 return None
 
         if not dt:
-            log.warn("无法解析时间字符串: " + text)
+            log.warning("无法解析时间字符串: " + text)
             return None
 
         # 如果解析结果仅包含日期（时分秒均为 0），且原字符串中不包含明显的时间信息，则默认设为中午 12 点
@@ -219,7 +219,7 @@ def any2unix(timeVar, form=""):
         log.debug("通过解析器解析到日期: " + dt.strftime("%Y-%m-%d %H:%M:%S"))
         return convert_to_unix(dt)
 
-    log.warn("无法识别的时间类型: " + str(type(timeVar)))
+    log.warning("无法识别的时间类型: " + str(type(timeVar)))
     return None
 
 
@@ -229,13 +229,13 @@ def str2tuple(stime, form=""):
     return time.strptime(s, form)
 
 
-def str2unix(stime, form=""):
-    """字符串时间转unix时间"""
+def _str2unix(stime, form=""):
+    """字符串时间转unix时间，仅内部使用，外部应该用any2unix"""
     s = str(stime)
     return int(time.mktime(str2tuple(s, form)))
 
 
-def unix2str(ftime_="", form="%Y%m%d%H%M%S"):
+def unix2str(ftime_=0.0, form="%Y%m%d%H%M%S"):
     """unix时间转字符串时间"""
     if not ftime_:
         ftime = time.time()
@@ -249,9 +249,10 @@ def unix2str(ftime_="", form="%Y%m%d%H%M%S"):
             return "0"
     except Exception as e:
         print(f"unix2str({ftime}, {form}) error: {e}")
+        return "0"
 
 
-def unix2taskId(rtime=0, offset=0):
+def unix2taskId(rtime=0.0, offset=0.0):
     """
     按半天量化为 11 点或 23 点（从10~22点都属于11am，22~10属于23pm）
     offset 以天为单位
@@ -349,7 +350,7 @@ def unix2chssk(ftime):
     return s
 
 
-def unix2chs(ftime_=""):
+def unix2chs(ftime_=0.0):
     if not ftime_:
         ftime = time.time()
     else:
@@ -437,7 +438,7 @@ def parse_by_regex(text):
                     day = int(numStr[4:6])
                     return datetime(year, month, day, 12, 0, 0)
             except Exception:  # as e:
-                # log.warn("正则解析日期失败: " + str(e))
+                # log.warning("正则解析日期失败: " + str(e))
                 continue
     return None
 
@@ -478,7 +479,7 @@ def parse_special_format(text):
                 baseDate = baseDate.replace(hour=12, minute=0, second=0)
             return baseDate
         except Exception as e:
-            log.warn("解析 'Day xxx of yyyy' 格式失败: " + str(e))
+            log.warning("解析 'Day xxx of yyyy' 格式失败: " + str(e))
 
     # 处理 "2023-W40-5" 格式
     m = re.search(r"(\d{4})-W(\d{1,2})-(\d)", text)
@@ -506,7 +507,7 @@ def parse_special_format(text):
                         dtObj = dtObj.replace(hour=hour, minute=minute)
             return dtObj
         except Exception as e:
-            log.warn("解析 'YYYY-Www-d' 格式失败: " + str(e))
+            log.warning("解析 'YYYY-Www-d' 格式失败: " + str(e))
 
     # 处理 "去年的今天"
     if "去年的今天" in text:
@@ -519,7 +520,7 @@ def parse_special_format(text):
                 dtObj = nowDt - timedelta(days=365)
             return dtObj
         except Exception as e:
-            log.warn("解析 '去年的今天' 失败: " + str(e))
+            log.warning("解析 '去年的今天' 失败: " + str(e))
 
     # 处理 "一周前"
     if "一周前" in text:
@@ -528,7 +529,7 @@ def parse_special_format(text):
             dtObj = nowDt - timedelta(weeks=1)
             return dtObj
         except Exception as e:
-            log.warn("解析 '一周前' 失败: " + str(e))
+            log.warning("解析 '一周前' 失败: " + str(e))
 
     # 未匹配到特殊格式，返回 None
     return None

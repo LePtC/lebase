@@ -59,7 +59,7 @@ def decrypt_password(masterPassword, encryptedStr):
         decrypted = fernet.decrypt(encryptedData.encode())
         return decrypted.decode()
     except Exception as e:
-        log.warn("解密密码失败: " + str(e))
+        log.warning("解密密码失败: " + str(e))
         return None
 
 

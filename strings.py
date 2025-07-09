@@ -203,7 +203,7 @@ def sanitize_filename(filename: str) -> str:
     :return: 处理后的合法文件名
     """
     if not filename:
-        log.warn("传入文件名为空")
+        log.warning("传入文件名为空")
         return "未命名"
 
     # ----------------去除前后空格----------------
@@ -243,18 +243,22 @@ def get_len_zh2(txt):
 # ----------------------------
 
 
-def strli(lst):
+def strli(lst, name=""):
     if lst:
         length = len(lst)
         if length < 6:
-            return f"{lst}"
+            ret = f"{lst}"
         else:
             n = list_length_classifier(length)
             abbr = f"{lst[:n]}"[:-1] + " ... " + f"{lst[-n:]}"[1:]
 
-            return f"{abbr} len={length}"
+            ret = f"{abbr} len={length}"
     else:
-        return "len=0"
+        ret = "len=0"
+
+    if name:
+        ret = f"{name}: {ret}"
+    return ret
 
 
 def list_length_classifier(length):
