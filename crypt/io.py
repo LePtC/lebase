@@ -8,7 +8,7 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
-from lebase.log import log  # 假定已提供 log.info 与 log.warn 函数
+from lelog.logs import log  # 假定已提供 log.info 与 log.warn 函数
 from levar import lev
 
 ########################################

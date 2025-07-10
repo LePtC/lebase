@@ -4,7 +4,7 @@
 """
 import time
 import random
-from lebase.log import log
+from lelog.logs import log
 
 
 class SleepGuard:

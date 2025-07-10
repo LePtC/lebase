@@ -11,7 +11,7 @@ from urllib import parse
 import tldextract
 from bs4 import BeautifulSoup
 
-from lebase.log import log
+from lelog.logs import log
 from lebase.safes import ensure_str
 
 

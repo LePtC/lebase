@@ -26,7 +26,7 @@ import threading
 import enum
 # from pathlib import Path
 
-from lebase.log import log  # 日志模块，包含 log.info、log.warn、log.error
+from lelog.logs import log  # 日志模块，包含 log.info、log.warn、log.error
 from levar import lev  # lev.appdata 为一个 pathlib.Path 对象，代表读写文件的目录
 
 

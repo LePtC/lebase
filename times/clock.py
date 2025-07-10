@@ -3,7 +3,7 @@
 计时器相关类和函数
 """
 import time
-from lebase.log import log
+from lelog.logs import log
 from lebase.safes import ensure_numstr
 
 

@@ -1,9 +1,9 @@
 import os
 
-from lebase.log import log
+from lelog.logs import log
 from lebase.strings import mma_replace
 from lebase.times.format import any2unix, unix2str
-from lefile.csv import csv_get
+from lefile.csv import read_csv
 
 dicNongli = {}
 dicHoliday = {}
@@ -20,7 +20,7 @@ def load_lunar():
         # 假设 lunar.csv 就在当前目录
         path = os.path.join(os.path.dirname(__file__), "lunar.csv")
         # path = lev.fac / "lebase/times/lunar.csv"
-        nongli = csv_get(path)
+        nongli = read_csv(path)
 
         if not dicNongli:
 

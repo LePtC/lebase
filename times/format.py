@@ -55,7 +55,7 @@ UTC2024-07-03T08:15:00Z
 - 代码要求：
     - 代码规范：变量名采用简短明了的小驼峰式命名，函数名则保持`snake_case`风格。
     - 模块化设计：独立的功能尽量抽取为独立的函数，避免将过多功能写在一个函数中。
-    - 日志记录：使用`log.info(string)`、`log.warning(string)`函数进行日志输出（已由 from lebase.log import log 模块提供）。
+    - 日志记录：使用`log.info(string)`、`log.warning(string)`函数进行日志输出（已由 from lelog.logs import log 模块提供）。
     - 注释和文档：代码中添加必要的中文注释，提供中文的说明文档。
     - 示例用例：提供各类场景的demo示例，演示程序的使用方法和效果。
     - 尽量使用现成库函数，遵循最佳实践
@@ -64,7 +64,7 @@ UTC2024-07-03T08:15:00Z
 import time
 import re
 from datetime import datetime, timedelta, date, time as datetime_time
-from lebase.log import log
+from lelog.logs import log
 from lebase.safes import ensure_num
 from lebase.strings import mma_replace
 

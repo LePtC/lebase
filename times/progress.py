@@ -3,7 +3,7 @@
 进度条相关类和函数
 """
 import time
-from lebase.log import log
+from lelog.logs import log
 
 
 def print_progress(start_time, countNum, totalNum, detail=""):

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from lebase.log import log
+from lelog.logs import log
 
 
 # ----------------------------
