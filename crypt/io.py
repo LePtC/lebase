@@ -9,7 +9,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 from lelog.logs import log  # 假定已提供 log.info 与 log.warn 函数
-from levar import lev
+from levar.var import lev
 
 ########################################
 # 1. 配置文件格式与密码加解密工具函数

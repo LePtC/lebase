@@ -17,3 +17,8 @@ def test_time_str_list():
     lst = time_str_list('2020040611', '2020040723')
     assert isinstance(lst, list)
     assert lst[0].startswith('20200406')
+
+
+if __name__ == "__main__":
+    import pytest
+    pytest.main([__file__])

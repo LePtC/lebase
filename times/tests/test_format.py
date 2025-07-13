@@ -23,3 +23,8 @@ def test_any2unix_datetime():
 def test_unix2chs():
     result = format.unix2chs(0)
     assert isinstance(result, str)
+
+
+if __name__ == "__main__":
+    import pytest
+    pytest.main([__file__])

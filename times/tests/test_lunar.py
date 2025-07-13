@@ -7,3 +7,9 @@ def test_str2lunar():
     assert isinstance(lunar, list)
     assert len(lunar) == 2
     assert isinstance(lunar[0], str)
+
+
+if __name__ == "__main__":
+    import pytest
+
+    pytest.main([__file__])
