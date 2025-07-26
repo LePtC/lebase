@@ -230,12 +230,24 @@ def sanitize_filename(filename: str) -> str:
 
 
 def get_len_zh2(txt):
-    """返回字符串中字符个数（一个汉字是2个字符）
-    :param txt: 字符串
-    :return: 字符个数
     """
-    txt_len = len(txt)
-    return int((len(txt.encode('utf-8')) - txt_len) / 2 + txt_len)
+    返回字符串的显示宽度：
+    - 中文宽度2
+    - 树状符号（│、├、└、─）宽度1
+    - 其它宽度1
+    :param txt: 字符串
+    :return: 显示宽度
+    """
+    tree_chars = set("│├└─")
+    real_len = 0
+    for ch in str(txt):
+        if '\u4e00' <= ch <= '\u9fff':  # 中文
+            real_len += 2
+        elif ch in tree_chars:
+            real_len += 1
+        else:
+            real_len += 1
+    return real_len
 
 
 # ----------------------------

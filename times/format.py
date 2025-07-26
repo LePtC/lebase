@@ -61,15 +61,18 @@ UTC2024-07-03T08:15:00Z
     - 尽量使用现成库函数，遵循最佳实践
 """
 
-import time
 import re
-from datetime import datetime, timedelta, date, time as datetime_time
-from lelog.logs import log
+import time
+from datetime import date, datetime, timedelta
+from datetime import time as datetime_time
+from typing import Optional, Union
+
 from lebase.safes import ensure_num
 from lebase.strings import mma_replace
+from lelog.logs import log
 
 
-def convert_to_unix(dt):
+def convert_to_unix(dt: datetime) -> float:
     """
     将 datetime 对象转换为 Unix 时间戳（秒）
     如果 dt 为 tz-aware，则直接调用 .timestamp()，
@@ -81,26 +84,15 @@ def convert_to_unix(dt):
         return time.mktime(dt.timetuple()) + dt.microsecond / 1e6
 
 
-def any2unix(timeVar, form=""):
+def any2unix(timeVar: Union[str, int, float, tuple, datetime, None], timeFormat: str = "") -> Optional[float]:
     """
     将任意格式的时间变量转换为 Unix 时间戳（秒）。
     支持的类型包括：datetime对象、数字、元组、字符串等。
     对于字符串，优先通过正则匹配常见数字格式，再采用 dateparser 或 dateutil.parser 解析。
     返回系统当地时区（通常为 UTC+8）的 Unix 时间戳（浮点数，单位秒）。
-
-    支持的字符串格式包括但不限于：
-        - 纯数字日期格式：2025020311、20250203113000、20250203（缺省时间默认中午12点）、250203 等
-        - 中文日期格式：2025年2月3日、25年2月3日、今天、昨天、明天、去年的今天 等
-        - 英文自然语言：5 hours ago、Tomorrow noon、Next Monday 9:00 AM、5th October 2023 at 2:48pm 等
-        - 带有额外文本或特殊符号的混合字符串
-        - Unix 时间戳（秒或毫秒）：1700000000, 1700000000000, "@1696502880" 等
-        - 其他特殊格式：ISO 周数、年份中的第几天等
-
-    注意：由于时间表达存在歧义（例如纯数字可能既是日期又是时间戳），在部分场景下可能会产生不同解释，
-    本函数采用启发式规则，可能无法覆盖所有边界情况。
     """
-    from dateutil import parser as dtParser
     import dateparser
+    from dateutil import parser as dtParser
 
     # 1. 如果是 datetime 对象，直接转换
     if isinstance(timeVar, datetime):
@@ -114,11 +106,10 @@ def any2unix(timeVar, form=""):
         nowTime = time.time()
         # 如果数字远大于当前时间，则可能为毫秒级时间戳
         if candidate > nowTime * 10:
-            candidate_sec = candidate / 1000.0
+            candidateSec = candidate / 1000.0
             log.debug("检测到数字为毫秒级时间戳，转换为秒制")
-            return candidate_sec
+            return candidateSec
         else:
-            # log.debug("检测到数字为秒级时间戳")
             return candidate
 
     # 3. 元组类型（例如 time.localtime() 返回的元组）
@@ -138,9 +129,8 @@ def any2unix(timeVar, form=""):
             log.warning("空字符串无法解析")
             return None
 
-        # log.debug("解析字符串: " + text)
-        if form:
-            return _str2unix(timeVar, form)
+        if timeFormat:
+            return _str2unix(timeVar, timeFormat)
 
         # 去除可能的前导 '@'
         if text.startswith("@"):
@@ -163,7 +153,6 @@ def any2unix(timeVar, form=""):
         # 优先尝试正则匹配数字日期格式
         dt = parse_by_regex(text)
         if dt:
-            # log.debug("通过正则表达式解析到日期: " + dt.strftime("%Y-%m-%d %H:%M:%S"))
             return convert_to_unix(dt)
 
         # 如果字符串为纯数字（可能为 Unix 时间戳）
@@ -173,9 +162,9 @@ def any2unix(timeVar, form=""):
                 candidate = float(text)
                 nowTime = time.time()
                 if candidate > nowTime * 10:
-                    candidate_sec = candidate / 1000.0
+                    candidateSec = candidate / 1000.0
                     log.debug("检测到纯数字为毫秒级时间戳，转换为秒制")
-                    return candidate_sec
+                    return candidateSec
                 else:
                     log.debug("检测到纯数字为秒级时间戳")
                     return candidate
@@ -223,32 +212,30 @@ def any2unix(timeVar, form=""):
     return None
 
 
-def str2tuple(stime, form=""):
+def str2tuple(timeStr: str, timeFormat: str = "") -> time.struct_time:
     """字符串时间转为元组时间"""
-    s = str(stime)
-    return time.strptime(s, form)
+    s = str(timeStr)
+    return time.strptime(s, timeFormat)
 
 
-def _str2unix(stime, form=""):
+def _str2unix(timeStr: str, timeFormat: str = "") -> float:
     """字符串时间转unix时间，仅内部使用，外部应该用any2unix"""
-    s = str(stime)
-    return int(time.mktime(str2tuple(s, form)))
+    s = str(timeStr)
+    return int(time.mktime(str2tuple(s, timeFormat)))
 
 
-def unix2str(ftime_=0.0, form="%Y%m%d%H%M%S"):
+def unix2str(unixTime: float = 0.0, timeFormat: str = "%Y%m%d%H%M%S") -> str:
     """unix时间转字符串时间"""
-    if not ftime_:
-        ftime = time.time()
-    else:
-        ftime = ftime_
-    tm = any2unix(ftime)
+    if not unixTime:
+        unixTime = time.time()
+    tm = any2unix(unixTime)
     try:
-        if tm > 0:
-            return time.strftime(form, time.localtime(tm))
+        if tm and tm > 0:
+            return time.strftime(timeFormat, time.localtime(tm))
         else:
             return "0"
     except Exception as e:
-        print(f"unix2str({ftime}, {form}) error: {e}")
+        print(f"unix2str({unixTime}, {timeFormat}) error: {e}")
         return "0"
 
 
@@ -295,7 +282,7 @@ def is_taskId(f):
 
 def unix2chsp(ftime: float):
     """unix时间转中文上下午"""
-    hour = int(unix2str(ftime, form="%H"))
+    hour = int(unix2str(ftime, timeFormat="%H"))
     if 4 <= hour <= 6:
         return "凌晨"
     elif 7 <= hour <= 11:
@@ -363,7 +350,7 @@ def unix2chs(ftime_=0.0):
 def unix2fsid(unix_time):
     millisecond = int(unix_time * 100) % 100
     str_millisecond = f"{millisecond:02d}"
-    return int(unix2str(unix_time, form="%Y%m%d%H%M%S") + str_millisecond)
+    return int(unix2str(unix_time, "%Y%m%d%H%M%S") + str_millisecond)
 
 
 def any2tuple(stime):
@@ -571,7 +558,7 @@ if __name__ == "__main__":
     # 测试
     # ----------------------------
 
-    print(unix2str(time.time(), form="%Y.%m.%d"))
+    print(unix2str(time.time(), "%Y.%m.%d"))
 
     print(unix2chs(time.time()))
 

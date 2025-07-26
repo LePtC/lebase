@@ -3,14 +3,16 @@
 进度条相关类和函数
 """
 import time
+from typing import Optional
+
 from lelog.logs import log
 
 
-def print_progress(start_time, countNum, totalNum, detail=""):
-    elapsed_time = int(time.time() - start_time)
-    remaining_time = ((totalNum - countNum) / countNum) * elapsed_time if countNum else 0
+def print_progress(startTime: float, countNum: int, totalNum: int, detail: str = "") -> str:
+    elapsedTime = int(time.time() - startTime)
+    remainingTime = ((totalNum - countNum) / countNum) * elapsedTime if countNum else 0
     percentage = (countNum / totalNum) * 100 if totalNum else 0
-    textProgress = f"{countNum} / {totalNum} ({percentage:.1f}%) T: {elapsed_time} / {remaining_time:.0f} s {detail}"
+    textProgress = f"{countNum} / {totalNum} ({percentage:.1f}%) T: {elapsedTime} / {remainingTime:.0f} s {detail}"
     print(f"\r{textProgress}", end="", flush=True)
     return textProgress
 
@@ -20,28 +22,28 @@ class Progress:
     进度打印日志类，通过 with 语法管理进度记录的开始、更新和结束。
 
     Attributes:
-        totalNum (int): 总任务数量
+        totalCount (int): 总任务数量
         startTime (float): 任务开始时的时间戳
-        countNum (int): 当前已处理的任务数量
+        currentCount (int): 当前已处理的任务数量
         printStep (int): 每隔多少步打印一次进度信息
     """
 
-    def __init__(self, totalNum, msg="", printStep=1, logStep=0):
+    def __init__(self, totalCount: int, msg: str = "", printStep: int = 1, logStep: int = 0):
         """
         初始化进度日志对象。
 
         Args:
-            totalNum (int): 总任务数量
+            totalCount (int): 总任务数量
             msg (str): 开始时输出的日志信息
             printStep (int): 每隔多少步打印一次进度信息，缺省值为1
             logStep (int): 在 printStep 基础上，每隔多少个 printStep 打印一次进度信息，缺省值为0（关闭）
         """
-        self.totalNum = totalNum
+        self.totalCount = totalCount
         self.msg = msg
         self.printStep = printStep if printStep > 0 else 1  # 确保 printStep 为正整数
         self.logStep = logStep
         self.startTime = time.time()
-        self.countNum = 0
+        self.currentCount = 0
         # 输出开始日志信息
         log.info("开始 " + msg + " ...")
 
@@ -51,7 +53,7 @@ class Progress:
         """
         return self
 
-    def tik(self, detail=""):
+    def tik(self, detail: str = ""):
         """
         更新进度，计数器加一，并根据 printStep 判断是否打印当前进度信息。
         注意：若总任务数无法整除 printStep，仍保证最后一次进度（100%）能打印出来。
@@ -59,23 +61,25 @@ class Progress:
         Args:
             detail (str): 当前任务的详细描述信息
         """
-        self.countNum += 1
+        self.currentCount += 1
         # 只有当步数是 printStep 的整数倍或者完成最后一步时，才打印进度信息
-        if (self.countNum % self.printStep == 0) or (self.countNum == self.totalNum):
+        if (self.currentCount % self.printStep == 0) or (self.currentCount == self.totalCount):
             msg = self.print_progress(detail)
             if self.logStep > 0:
-                if (self.countNum // self.printStep % self.logStep == 0) or (self.countNum == self.totalNum):
+                if (self.currentCount // self.printStep % self.logStep == 0) or (
+                    self.currentCount == self.totalCount
+                ):
                     print("")  # 换行
                     log.info(msg)
 
-    def fin(self, detail=""):
+    def fin(self, detail: str = ""):
         """
-        适用于 batchSize 不整除时最后批上传后直接完成？
+        适用于 batchSize 不整除时最后批上传后直接完成
         """
-        self.countNum = self.totalNum - 1
+        self.currentCount = self.totalCount - 1
         self.tik(detail)
 
-    def print_progress(self, detail=""):
+    def print_progress(self, detail: str = "") -> str:
         """
         打印当前进度信息，包括已处理数量、总数量、百分比、已用时间和估计剩余时间。
 
@@ -83,10 +87,10 @@ class Progress:
             detail (str): 当前任务的详细描述信息
         """
         elapsedTime = int(time.time() - self.startTime)
-        remainingTime = int(self.calc_remaining_time(elapsedTime, self.countNum, self.totalNum))
-        percentage = self.calc_percentage(self.countNum, self.totalNum)
+        remainingTime = int(self.calc_remaining_time(elapsedTime, self.currentCount, self.totalCount))
+        percentage = self.calc_percentage(self.currentCount, self.totalCount)
         textProgress = (
-            f"{self.countNum} / {self.totalNum} "
+            f"{self.currentCount} / {self.totalCount} "
             f"({percentage:.1f}%) T: {elapsedTime} / {remainingTime} s "
             f"{detail}"
         )
@@ -95,41 +99,41 @@ class Progress:
         return textProgress
 
     @staticmethod
-    def calc_remaining_time(elapsedTime, countNum, totalNum):
+    def calc_remaining_time(elapsedTime: int, currentCount: int, totalCount: int) -> float:
         """
         计算估计的剩余时间。
 
         Args:
             elapsedTime (int): 已用时间（秒）
-            countNum (int): 当前已处理任务数
-            totalNum (int): 总任务数
+            currentCount (int): 当前已处理任务数
+            totalCount (int): 总任务数
 
         Returns:
             float: 估计剩余时间（秒）
         """
-        if countNum:
-            return ((totalNum - countNum) / countNum) * elapsedTime
+        if currentCount:
+            return ((totalCount - currentCount) / currentCount) * elapsedTime
         else:
             return 0
 
     @staticmethod
-    def calc_percentage(countNum, totalNum):
+    def calc_percentage(currentCount: int, totalCount: int) -> float:
         """
         计算已处理任务的百分比。
 
         Args:
-            countNum (int): 当前已处理任务数
-            totalNum (int): 总任务数
+            currentCount (int): 当前已处理任务数
+            totalCount (int): 总任务数
 
         Returns:
             float: 完成百分比
         """
-        if totalNum:
-            return (countNum / totalNum) * 100
+        if totalCount:
+            return (currentCount / totalCount) * 100
         else:
             return 0
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: Optional[type], exc_val: Optional[Exception], exc_tb: Optional[type]) -> None:
         """
         离开 with 语句时调用，输出结束日志和换行符。
         如果在任务处理中发生异常，则记录警告日志。
@@ -171,7 +175,7 @@ if __name__ == "__main__":
         示例2：处理过程中出现异常的情况，演示如何捕获异常并记录日志。
         """
         try:
-            with Progress(totalNum=10, msg="处理 10 个下载", printStep=2, logStep=1) as pr:
+            with Progress(totalCount=10, msg="处理 10 个下载", printStep=2, logStep=1) as pr:
                 for i in range(1, 11):
                     time.sleep(0.2)
                     # 模拟在第5个任务时抛出异常
