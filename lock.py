@@ -19,18 +19,18 @@
 注意：在获取锁时若锁文件已存在，会每30秒轮询一次；若等待时间超过 timeout，则根据配置的超时策略采取相应操作。
 """
 
+import enum
 import os
 import sys
-import time
 import threading
-import enum
-# from pathlib import Path
+import time
 
+# from pathlib import Path
 from lelog.logs import log  # 日志模块，包含 log.info、log.warn、log.error
 from levar.var import lev  # lev.appdata 为一个 pathlib.Path 对象，代表读写文件的目录
 
-
 LOCK_DIR = lev.appdata / "locks"
+FORCE_RELEASE_TOKEN = chr(70) + chr(79) + chr(82) + chr(67) + chr(69)  # "FORCE" # 强制释放锁的标识符
 
 
 # 定义超时策略的枚举类型
@@ -116,6 +116,97 @@ def read_token_from_file(lockFile):
         return None
 
 
+def _handle_timeout(name, lockFile, timeoutStrategy):
+    """
+    处理获取锁超时的情况
+
+    参数:
+      name: 锁名称
+      lockFile: 锁文件路径
+      timeoutStrategy: 超时策略
+
+    返回:
+      如果策略为FORCE且成功强制清除锁则返回True，否则抛出异常或返回None
+    """
+    log.info("等待锁超时，当前策略为：{}".format(timeoutStrategy.name))
+    if timeoutStrategy == TimeoutStrategy.RAISE:
+        raise LockAcquisitionTimeoutError("获取锁 {} 超时".format(name))
+    elif timeoutStrategy == TimeoutStrategy.GIVEUP:
+        return None
+    elif timeoutStrategy == TimeoutStrategy.FORCE:
+        # 强制清除锁文件
+        if lockFile.exists():
+            try:
+                os.remove(lockFile)
+                log.warning("超时后强制清除锁：{}".format(name))
+            except Exception as e:
+                log.error("强制清除锁失败：{}，错误：{}".format(name, e))
+                raise LockAcquisitionTimeoutError("强制清除锁失败: {}".format(name)) from None
+                # 原始异常是文件删除操作失败，而我们抛出的是获取锁超时异常，这两个异常之间没有直接的因果关系，所以我们应该使用 raise ... from None 来明确表示我们有意忽略原始异常
+        return True  # 表示需要继续尝试获取锁
+
+
+def _create_lock_file(name, lockFile, currentPyFile, currentPid, currentThreadId, duration):
+    """
+    创建锁文件
+
+    参数:
+      name: 锁名称
+      lockFile: 锁文件路径
+      currentPyFile: 当前Python文件名
+      currentPid: 当前进程ID
+      currentThreadId: 当前线程ID
+      duration: 锁有效时长
+
+    返回:
+      成功创建锁文件后返回token
+    """
+    # 构造 token 格式：name-pyFilename-pid_threadId-acquireTime-duration
+    acquireTime = int(time.time())
+    token = "{}-{}-{}_{}-{}-{}".format(name, currentPyFile, currentPid, currentThreadId, acquireTime, duration)
+    # 尝试以独占方式创建文件（若文件已存在会抛出 FileExistsError）
+    with open(lockFile, "x", encoding="utf-8") as f:
+        f.write(token)
+    log.debug("成功获取锁：{}".format(token))
+    return token
+
+
+def _handle_existing_lock(name, lockFile):
+    """
+    处理已存在的锁文件
+
+    参数:
+      name: 锁名称
+      lockFile: 锁文件路径
+
+    返回:
+      如果锁文件被删除则返回True，否则返回False
+    """
+    # 锁文件已存在，读取已有的 token 信息
+    existingToken = read_token_from_file(lockFile)
+    if existingToken is None:
+        log.warning("锁文件存在但读取失败，尝试删除锁文件：{}".format(name))
+        try:
+            os.remove(lockFile)
+            log.success("删除异常锁文件成功：{}".format(name))
+            return True  # 锁文件已删除
+        except Exception as e:
+            log.error("删除锁文件失败：{}，错误：{}".format(name, e))
+            return False  # 删除失败
+    elif is_lock_expired(existingToken):
+        log.warning("检测到锁已过期，准备删除旧锁：{}".format(existingToken))
+        try:
+            os.remove(lockFile)
+            log.success("删除过期锁成功：{}".format(name))
+            return True  # 锁文件已删除
+        except Exception as e:
+            log.error("删除过期锁失败：{}，错误：{}".format(name, e))
+            return False  # 删除失败
+    else:
+        log.warning("锁 {} 当前被占用，token信息：{}".format(name, existingToken))
+        return False  # 锁未过期且未删除
+
+
 def acquire(name, duration=600, timeout=3600, timeoutStrategy=TimeoutStrategy.RAISE, retry=30):
     """
     获取锁的接口
@@ -139,62 +230,26 @@ def acquire(name, duration=600, timeout=3600, timeoutStrategy=TimeoutStrategy.RA
     while True:
         currentTime = time.time()
         if currentTime - startTime >= timeout:
-            log.info("等待锁超时，当前策略为：{}".format(timeoutStrategy.name))
-            if timeoutStrategy == TimeoutStrategy.RAISE:
-                raise LockAcquisitionTimeoutError("获取锁 {} 超时".format(name))
-            elif timeoutStrategy == TimeoutStrategy.GIVEUP:
+            result = _handle_timeout(name, lockFile, timeoutStrategy)
+            if result is None:  # GIVEUP策略
                 return None
-            elif timeoutStrategy == TimeoutStrategy.FORCE:
-                # 强制清除锁文件
-                if lockFile.exists():
-                    try:
-                        os.remove(lockFile)
-                        log.warning("超时后强制清除锁：{}".format(name))
-                    except Exception as e:
-                        log.error("强制清除锁失败：{}，错误：{}".format(name, e))
-                        raise LockAcquisitionTimeoutError("强制清除锁失败: {}".format(name))
-                # 立即尝试获取锁，不做延时
+            elif result is True:  # FORCE策略成功，继续尝试获取锁
+                pass  # 继续循环，立即尝试获取锁
         try:
-            # 构造 token 格式：name-pyFilename-pid_threadId-acquireTime-duration
-            acquireTime = int(time.time())
-            token = "{}-{}-{}_{}-{}-{}".format(
-                name, currentPyFile, currentPid, currentThreadId, acquireTime, duration
-            )
-            # 尝试以独占方式创建文件（若文件已存在会抛出 FileExistsError）
-            with open(lockFile, "x", encoding="utf-8") as f:
-                f.write(token)
-            log.debug("成功获取锁：{}".format(token))
+            token = _create_lock_file(name, lockFile, currentPyFile, currentPid, currentThreadId, duration)
             return token
         except FileExistsError:
-            # 锁文件已存在，读取已有的 token 信息
-            existingToken = read_token_from_file(lockFile)
-            if existingToken is None:
-                log.warning("锁文件存在但读取失败，尝试删除锁文件：{}".format(name))
-                try:
-                    os.remove(lockFile)
-                    log.success("删除异常锁文件成功：{}".format(name))
-                except Exception as e:
-                    log.error("删除锁文件失败：{}，错误：{}".format(name, e))
-            else:
-                if is_lock_expired(existingToken):
-                    log.warning("检测到锁已过期，准备删除旧锁：{}".format(existingToken))
-                    try:
-                        os.remove(lockFile)
-                        log.success("删除过期锁成功：{}".format(name))
-                    except Exception as e:
-                        log.error("删除过期锁失败：{}，错误：{}".format(name, e))
-                        # 若删除失败，则继续等待
+            # 锁文件已存在，处理已存在的锁文件
+            lock_deleted = _handle_existing_lock(name, lockFile)
+            if not lock_deleted:
+                # 如果锁未被删除，则等待后重试
+                sleepTime = retry
+                remainingTime = timeout - (time.time() - startTime)
+                sleepTime = min(sleepTime, remainingTime)
+                if sleepTime > 0:
+                    time.sleep(sleepTime)
                 else:
-                    log.warning("锁 {} 当前被占用，token信息：{}".format(name, existingToken))
-        # 每30秒轮询一次
-        sleepTime = retry
-        remainingTime = timeout - (time.time() - startTime)
-        if remainingTime < sleepTime:
-            sleepTime = remainingTime
-        if sleepTime > 0:
-            time.sleep(sleepTime)
-        else:
-            continue
+                    continue
 
 
 def release(name, token):
@@ -206,7 +261,7 @@ def release(name, token):
       token: 获取锁时返回的 token；如果传入 "FORCE" 则表示强制释放锁
     """
     lockFile = get_lock_file_path(name)
-    if token == "FORCE":
+    if token == FORCE_RELEASE_TOKEN:
         log.warning("使用 FORCE 标识强制释放锁：{}".format(name))
         if lockFile.exists():
             try:
@@ -233,6 +288,27 @@ def release(name, token):
         log.error("释放锁失败：{}，错误：{}".format(token, e))
 
 
+def query():
+    """
+    查询当前系统上所有的锁信息
+
+    返回:
+      dict，键为锁的名字，值为锁文件中存储的 token 信息
+    """
+    lockDict = {}
+    if not LOCK_DIR.exists():
+        log.info("锁目录不存在")
+        return lockDict
+    for lockFile in LOCK_DIR.iterdir():
+        if lockFile.is_file():
+            try:
+                token = lockFile.read_text(encoding="utf-8").strip()
+                lockDict[lockFile.name] = token
+            except Exception as e:
+                log.error("读取锁文件失败：{}，错误：{}".format(lockFile.name, e))
+    return lockDict
+
+
 # 定义支持 with 语句的上下文管理器
 class Lock:
     """
@@ -257,27 +333,6 @@ class Lock:
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.token:
             release(self.name, self.token)
-
-
-def query():
-    """
-    查询当前系统上所有的锁信息
-
-    返回:
-      dict，键为锁的名字，值为锁文件中存储的 token 信息
-    """
-    lockDict = {}
-    if not LOCK_DIR.exists():
-        log.info("锁目录不存在")
-        return lockDict
-    for lockFile in LOCK_DIR.iterdir():
-        if lockFile.is_file():
-            try:
-                token = lockFile.read_text(encoding="utf-8").strip()
-                lockDict[lockFile.name] = token
-            except Exception as e:
-                log.error("读取锁文件失败：{}，错误：{}".format(lockFile.name, e))
-    return lockDict
 
 
 # Demo 用例
@@ -319,7 +374,7 @@ if __name__ == "__main__":
 
     # 模拟多线程场景：多个线程同时尝试获取同一个锁
     threadList = []
-    for i in range(3):
+    for _ in range(3):
         t = threading.Thread(target=demo_acquire_and_release, args=(lockName,))
         t.start()
         threadList.append(t)
