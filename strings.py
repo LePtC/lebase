@@ -21,8 +21,8 @@ def mma_replace(s: str, rule: dict):
     仅适用于字符串
     auth: 氘化氢
     """
-    for keys in rule:
-        s = s.replace(ensure_str(keys), ensure_str(rule[keys]))
+    for key, value in rule.items():
+        s = s.replace(ensure_str(key), ensure_str(value))
     return s
 
 
@@ -148,7 +148,10 @@ def filt_non_cn(sentence):
     )
 
 
-def filt_blank(s, rule=["\n", "\r", "\t", " ", "&nbsp;"]):
+CHAR_BLANK = ["\n", "\r", "\t", " ", "&nbsp;"]
+
+
+def filt_blank(s, rule=CHAR_BLANK):
     """
     清除全部空格和换行符
     """
