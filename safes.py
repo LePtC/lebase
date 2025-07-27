@@ -3,9 +3,8 @@
 Level 0.5（可被 lebase.times 引用）
 times 更高阶，因此 ensure_taskId 放在 times
 """
-import math
 import io
-
+import math
 
 # ----------------------------
 # ensure系列
@@ -94,6 +93,7 @@ def ensure_quoted(path):
 # ----------------------------
 # safe系列
 # ----------------------------
+
 
 def is_convertible_to_int(value):
     try:

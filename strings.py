@@ -11,8 +11,8 @@ from urllib import parse
 import tldextract
 from bs4 import BeautifulSoup
 
-from lelog.logs import log
 from lebase.safes import ensure_str
+from lelog.logs import log
 
 
 def mma_replace(s: str, rule: dict):
@@ -107,20 +107,21 @@ def strpad(anyInput, target_width=16):
     s = str(anyInput)
     for ch in s:
         # 如果字符为全角或宽字符，则计宽度2，否则计1
-        if unicodedata.east_asian_width(ch) in ('F', 'W'):
+        if unicodedata.east_asian_width(ch) in ("F", "W"):
             current_width += 2
         else:
             current_width += 1
 
     # 如果宽度不足，补足空格
     if current_width < target_width:
-        s += ' ' * (target_width - current_width)
+        s += " " * (target_width - current_width)
     return s
 
 
 # ----------------------------
 # filters
 # ----------------------------
+
 
 def trim_tail(s, t):
     if s.endswith(t):
@@ -241,7 +242,7 @@ def get_len_zh2(txt):
     tree_chars = set("│├└─")
     real_len = 0
     for ch in str(txt):
-        if '\u4e00' <= ch <= '\u9fff':  # 中文
+        if "\u4e00" <= ch <= "\u9fff":  # 中文
             real_len += 2
         elif ch in tree_chars:
             real_len += 1
@@ -293,6 +294,7 @@ def print_1line(msg):
 # ----------------------------
 # 各种 parser
 # ----------------------------
+
 
 # >>> "<h1>swwww<h1>22ddd".split('<h1>')
 # ['', 'swwww', '22ddd']

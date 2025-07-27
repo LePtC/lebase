@@ -13,7 +13,11 @@ def transpose(li):
 
 def flatten(L):
     """auth: 霜落"""
-    return sum(map(flatten, L), []) if isinstance(L, list) else [L]
+    from itertools import chain
+    if isinstance(L, list):
+        return list(chain.from_iterable(map(flatten, L)))
+    else:
+        return [L]
 
 
 def filt_null(liStr):
@@ -58,7 +62,7 @@ def safe_li0(li):
 # ----------------------------
 
 
-def lidic2table(liDic, f=0, cols=[]):
+def lidic2table(liDic, f=0, cols=None):
     """list of dict（通常来自数据库）转换成 2d list
     f: 数据缺失的地方填充什么
     """
@@ -76,12 +80,12 @@ def lidic2table(liDic, f=0, cols=[]):
             for k in head:
                 row.append(x.get(k, f))
             li2d.append(row)
-        return [head] + li2d
+        return [head, *li2d]
 
 
 def table_append(li2d, elem=0):
     """2d list 右侧续一列"""
-    return [row + [elem] for row in li2d]
+    return [[*row, elem] for row in li2d]
 
 
 def lidic2table_cols(liDic, head, f=0):
@@ -91,7 +95,7 @@ def lidic2table_cols(liDic, head, f=0):
         for k in head:
             row.append(x.get(k, f))
         li2d.append(row)
-    return [head] + li2d
+    return [head, *li2d]
 
 
 def table2html(li2d):

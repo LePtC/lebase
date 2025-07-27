@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 from lelog.logs import log
 
-
 # ----------------------------
 # dict 操作工具
 # ----------------------------
@@ -87,7 +86,7 @@ def check_for_update(dicSrc, dicDst):
     return False  # 如果所有键值对都匹配，则返回False
 
 
-def check_useless(inputDict, uselessKeys=[]):
+def check_useless(inputDict, uselessKeys=None):
     """
     检查传入的字典中是否除了指定的无用键（uselessKeys）以外没有其它的键。
 
@@ -99,6 +98,10 @@ def check_useless(inputDict, uselessKeys=[]):
         bool: 如果字典中仅包含无用键（或为空字典），则返回 True；如果存在其它非无用键，则返回 False。
 
     """
+    # 如果uselessKeys为None，则设置默认值
+    if uselessKeys is None:
+        uselessKeys = ["_id", "mid", "rtime"]
+
     # 检查输入是否为字典
     if not isinstance(inputDict, dict):
         log.error("传入的参数不是一个字典类型！")
