@@ -3,58 +3,58 @@
 # ----------------------------
 
 
-def transpose(li):
+def transpose(lst):
     """
     二维 list 转置
-    warning: 不等长列表会被裁短 li=[[1,2],[3,4],[5]] gives you [[1,3,5]]
+    warning: 不等长列表会被裁短 lst=[[1,2],[3,4],[5]] gives you [[1,3,5]]
     """
-    return list(map(list, zip(*li)))
+    return list(map(list, zip(*lst)))
 
 
-def flatten(L):
+def flatten(lst):
     """auth: 霜落"""
     from itertools import chain
-    if isinstance(L, list):
-        return list(chain.from_iterable(map(flatten, L)))
+    if isinstance(lst, list):
+        return list(chain.from_iterable(map(flatten, lst)))
     else:
-        return [L]
+        return [lst]
 
 
-def filt_null(liStr):
-    return [x for x in liStr if x]
+def filt_null(lstStr):
+    return [x for x in lstStr if x]
 
 
-def listset(list1):
+def listset(lstFirst):
     """
     去重且尽可能保留原 list 的顺序
     """
-    if not list1:  # 防空表格报错
+    if not lstFirst:  # 防空表格报错
         return []
 
-    if isinstance(list1[0], list):  # 二维表格提取首列去重然后用字典恢复
-        dicRecover = {r[0]: r for r in list1}
-        list0 = listset([r[0] for r in list1])  # 递归到一维情形处理
-        list2 = [dicRecover[i] for i in list0]
-        return list2
+    if isinstance(lstFirst[0], list):  # 二维表格提取首列去重然后用字典恢复
+        dicRecover = {r[0]: r for r in lstFirst}
+        lst0 = listset([r[0] for r in lstFirst])  # 递归到一维情形处理
+        lstSecond = [dicRecover[i] for i in lst0]
+        return lstSecond
 
     else:
         try:
-            # list2 = list(set(list1))
-            # list2.sort(key=list1.index)
-            list2 = list(dict.fromkeys(list1))  # 这个方案速度神一样快
-            return list2
+            # lstSecond = list(set(lstFirst))
+            # lstSecond.sort(key=lstFirst.index)
+            lstSecond = list(dict.fromkeys(lstFirst))  # 这个方案速度神一样快
+            return lstSecond
 
         except Exception as e:
             print(f"[error] listset 失败 err: {e}")
-            return list1
+            return lstFirst
 
 
-def safe_li0(li):
-    """传入 list，返回 li[0]，防空数组"""
-    if len(li) <= 0:
+def safe_li0(lstInput):
+    """传入 list，返回 lstInput[0]，防空数组"""
+    if len(lstInput) <= 0:
         return ""
     else:
-        return li[0]
+        return lstInput[0]
 
 
 # ----------------------------
@@ -62,45 +62,45 @@ def safe_li0(li):
 # ----------------------------
 
 
-def lidic2table(liDic, f=0, cols=None):
+def lidic2table(lstDic, f=0, cols=None):
     """list of dict（通常来自数据库）转换成 2d list
     f: 数据缺失的地方填充什么
     """
     if cols:
-        return lidic2table_cols(liDic, cols, f)
+        return lidic2table_cols(lstDic, cols, f)
     else:
-        li2d = []
+        lst2d = []
         head = []
-        for x in liDic:
+        for x in lstDic:
             row = []
             for k in x.keys():
                 if k not in head:
                     head.append(k)
-                    li2d = table_append(li2d, f)
+                    lst2d = table_append(lst2d, f)
             for k in head:
                 row.append(x.get(k, f))
-            li2d.append(row)
-        return [head, *li2d]
+            lst2d.append(row)
+        return [head, *lst2d]
 
 
-def table_append(li2d, elem=0):
+def table_append(lst2d, elem=0):
     """2d list 右侧续一列"""
-    return [[*row, elem] for row in li2d]
+    return [[*row, elem] for row in lst2d]
 
 
-def lidic2table_cols(liDic, head, f=0):
-    li2d = []
-    for x in liDic:
+def lidic2table_cols(lstDic, head, f=0):
+    lst2d = []
+    for x in lstDic:
         row = []
         for k in head:
             row.append(x.get(k, f))
-        li2d.append(row)
-    return [head, *li2d]
+        lst2d.append(row)
+    return [head, *lst2d]
 
 
-def table2html(li2d):
+def table2html(lst2d):
     s = "<table><tbody>"
-    for line in li2d:
+    for line in lst2d:
         s += "<tr>"
         for col in line:
             s += f"<td>{col}</td>"
@@ -109,22 +109,22 @@ def table2html(li2d):
     return s
 
 
-def compare(standard_list, compare_list):
+def compare(standardList, compareList):
     """
-    比较两个列表，返回compare_list中相对于standard_list的多余和缺少的元素（均按从小到大排序）。
+    比较两个列表，返回compareList中相对于standardList的多余和缺少的元素（均按从小到大排序）。
 
     参数：
-        standard_list (list): 标准列表
-        compare_list (list): 待比较列表
+        standardList (list): 标准列表
+        compareList (list): 待比较列表
 
     返回：
         tuple: (extra, missing)
-            extra: 在compare_list中但不在standard_list中的元素，按从小到大排序。
-            missing: 在standard_list中但不在compare_list中的元素，按从小到大排序。
+            extra: 在compareList中但不在standardList中的元素，按从小到大排序。
+            missing: 在standardList中但不在compareList中的元素，按从小到大排序。
     """
     # 使用集合求差集，再转成列表排序
-    extra = sorted(list(set(compare_list) - set(standard_list)))
-    missing = sorted(list(set(standard_list) - set(compare_list)))
+    extra = sorted(list(set(compareList) - set(standardList)))
+    missing = sorted(list(set(standardList) - set(compareList)))
 
     return extra, missing
 
