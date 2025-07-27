@@ -5,7 +5,7 @@
 """
 import re
 
-from lebase.safes import ensure_str
+from lebase.ensures import ensure_str
 
 
 def replace_rule(s, rule):

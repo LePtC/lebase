@@ -1,8 +1,8 @@
 import json
 import time
-from lebase.safes import ensure_num
-from lebase.crypt.lehash import get_sha, dic2dec
 
+from lebase.crypt.lehash import dic2dec, get_sha
+from lebase.ensures import ensure_num
 
 # ----------------------------
 # django request 转 ip 和时间戳验密
@@ -111,9 +111,8 @@ def request2dec(request, colUser, colReq):
                 if "*" in goodIP:
                     if req["ip"].startswith(goodIP.replace("*", "")):
                         isAllowIp = True
-                else:
-                    if req["ip"] == goodIP:
-                        isAllowIp = True
+                elif req["ip"] == goodIP:
+                    isAllowIp = True
 
         if not isAllowIp:
             m = "❌ ip不认识 " + m

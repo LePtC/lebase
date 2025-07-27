@@ -6,7 +6,7 @@
 import re
 from urllib import parse
 
-from lebase.safes import ensure_str
+from lebase.ensures import ensure_str
 from lelog.logs import log
 
 

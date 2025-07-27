@@ -6,7 +6,7 @@ import time
 from types import TracebackType
 from typing import Optional
 
-from lebase.safes import ensure_numstr
+from lebase.ensures import ensure_numstr
 from lelog.logs import log
 
 
