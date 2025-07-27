@@ -84,7 +84,7 @@ def convert_to_unix(dt: datetime) -> float:
         return time.mktime(dt.timetuple()) + dt.microsecond / 1e6
 
 
-def any2unix(timeVar: Union[str, int, float, tuple, datetime, None], timeFormat: str = "") -> Optional[float]:
+def any2unix(timeVar: Union[str, int, float, tuple, datetime, None], fmt: str = "") -> Optional[float]:
     """
     将任意格式的时间变量转换为 Unix 时间戳（秒）。
     支持的类型包括：datetime对象、数字、元组、字符串等。
@@ -129,8 +129,8 @@ def any2unix(timeVar: Union[str, int, float, tuple, datetime, None], timeFormat:
             log.warning("空字符串无法解析")
             return None
 
-        if timeFormat:
-            return _str2unix(timeVar, timeFormat)
+        if fmt:
+            return _str2unix(timeVar, fmt)
 
         # 去除可能的前导 '@'
         if text.startswith("@"):
@@ -212,30 +212,30 @@ def any2unix(timeVar: Union[str, int, float, tuple, datetime, None], timeFormat:
     return None
 
 
-def str2tuple(timeStr: str, timeFormat: str = "") -> time.struct_time:
+def str2tuple(timeStr: str, fmt: str = "") -> time.struct_time:
     """字符串时间转为元组时间"""
     s = str(timeStr)
-    return time.strptime(s, timeFormat)
+    return time.strptime(s, fmt)
 
 
-def _str2unix(timeStr: str, timeFormat: str = "") -> float:
+def _str2unix(timeStr: str, fmt: str = "") -> float:
     """字符串时间转unix时间，仅内部使用，外部应该用any2unix"""
     s = str(timeStr)
-    return int(time.mktime(str2tuple(s, timeFormat)))
+    return int(time.mktime(str2tuple(s, fmt)))
 
 
-def unix2str(unixTime: float = 0.0, timeFormat: str = "%Y%m%d%H%M%S") -> str:
+def unix2str(unixTime: float = 0.0, fmt: str = "%Y%m%d%H%M%S") -> str:
     """unix时间转字符串时间"""
     if not unixTime:
         unixTime = time.time()
     tm = any2unix(unixTime)
     try:
         if tm and tm > 0:
-            return time.strftime(timeFormat, time.localtime(tm))
+            return time.strftime(fmt, time.localtime(tm))
         else:
             return "0"
     except Exception as e:
-        print(f"unix2str({unixTime}, {timeFormat}) error: {e}")
+        print(f"unix2str({unixTime}, {fmt}) error: {e}")
         return "0"
 
 
@@ -282,7 +282,7 @@ def is_taskId(f):
 
 def unix2chsp(ftime: float):
     """unix时间转中文上下午"""
-    hour = int(unix2str(ftime, timeFormat="%H"))
+    hour = int(unix2str(ftime, "%H"))
     if 4 <= hour <= 6:
         return "凌晨"
     elif 7 <= hour <= 11:
@@ -314,9 +314,9 @@ def taskId2fmt(tm):
     return tm[:4] + "." + tm[4:6] + "." + tm[6:8] + "-" + tm[8:]
 
 
-def taskId2chs(date, form="%Y年%m月%d日（%a）"):
+def taskId2chs(date, fmt="%Y年%m月%d日（%a）"):
     s1 = (
-        time.strftime(form.encode("unicode_escape").decode("utf8"), any2tuple(date))
+        time.strftime(fmt.encode("unicode_escape").decode("utf8"), any2tuple(date))
         .encode("utf-8")
         .decode("unicode_escape")
     )
@@ -621,5 +621,5 @@ if __name__ == "__main__":
             dt_str = "解析失败"
         print(f"输入: {inp}\n解析结果: {dt_str}\n{'-' * 40}")
 
-    print(unix2chs(any2unix("2025年03月08日23", form="%Y年%m月%d日%H")))
+    print(unix2chs(any2unix("2025年03月08日23", "%Y年%m月%d日%H")))
     # 输出应为2025-03-08 23:00:00

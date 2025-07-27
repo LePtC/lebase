@@ -82,7 +82,7 @@ def lastday_of_month(month: str) -> str:
     else:
         s = s + "0112"
 
-    nextmonth1 = any2unix(s, timeFormat="%Y%m%d%H")
+    nextmonth1 = any2unix(s, "%Y%m%d%H")
     if nextmonth1 is None:
         return ""
     return unix2str(nextmonth1 - 24 * 3600)[:8]
