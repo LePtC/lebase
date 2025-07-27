@@ -97,7 +97,7 @@ def lst_len_classifier(length):
     return 6
 
 
-def print_1line(msg):
+def print_single_line(msg):
     """\r 是回车符，将光标移到当前行的开头
     end 参数防止 print 函数输出新行
     flush() 强制刷新输出缓冲区，确保消息立即显示
@@ -141,5 +141,5 @@ if __name__ == "__main__":
     # 示例使用
     length = [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 19, 20, 22, 33]
     for n in length:
-        print_1line(str_lst(list(range(n))))
+        print_single_line(str_lst(list(range(n))))
         time.sleep(1)

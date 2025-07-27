@@ -4,7 +4,7 @@
 """
 import unittest
 
-from lebase.strings.operates import filt_blank, filt_dupblank, replace_rule, trim_tail
+from lebase.strings.operates import filt_blank, filt_dup_blank, replace_rule, trim_tail
 
 
 class TestOperates(unittest.TestCase):
@@ -38,10 +38,10 @@ class TestOperates(unittest.TestCase):
         result = filt_blank(s, [" ", "\t"])
         self.assertEqual(result, "这是一个\n测试字符串")
 
-    def test_filt_dupblank(self):
-        """测试filt_dupblank函数"""
+    def test_filt_dup_blank(self):
+        """测试filt_dup_blank函数"""
         text = "这  是\n\n\n一个\t\t测试"
-        result = filt_dupblank(text)
+        result = filt_dup_blank(text)
         self.assertEqual(result, "这 是\n\n一个\t\t测试")
 
 

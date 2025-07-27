@@ -39,7 +39,7 @@ def filt_blank(s, rule=None):
     return replace_rule(ensure_str(s).strip(), {x: "" for x in rule})
 
 
-def filt_dupblank(text):
+def filt_dup_blank(text):
     """
     清除连续重复的空格和换行符
     """
