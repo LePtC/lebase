@@ -68,7 +68,7 @@ from datetime import time as datetime_time
 from typing import Optional, Union
 
 from lebase.safes import ensure_num
-from lebase.strings import mma_replace
+from lebase.strings import replace_rule
 from lelog.logs import log
 
 
@@ -320,7 +320,7 @@ def taskId2chs(date, fmt="%Y年%m月%d日（%a）"):
         .encode("utf-8")
         .decode("unicode_escape")
     )
-    return mma_replace(s1, week_eng2chs)
+    return replace_rule(s1, week_eng2chs)
 
 
 def unix2chsrq(ftime):

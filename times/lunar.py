@@ -1,7 +1,7 @@
 import os
 from typing import Dict, List, Tuple
 
-from lebase.strings import mma_replace
+from lebase.strings import replace_rule
 from lebase.times.format import any2unix, unix2str
 from lefile.csv import read_csv
 from lelog.logs import log
@@ -61,7 +61,7 @@ def str2lunar(dateStr: str) -> List[str]:
     if dicLunar.get(str(dateStr), ""):
         t = any2unix(str(dateStr))
         if t is not None:
-            w = mma_replace(str(unix2str(t, "%a")), weekEngToChs).replace("周", "")
+            w = replace_rule(str(unix2str(t, "%a")), weekEngToChs).replace("周", "")
             ret = [w, dicLunar.get(str(dateStr), "")]
             return ret
     return []

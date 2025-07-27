@@ -4,15 +4,15 @@ HTML处理模块测试
 """
 import unittest
 
-from lebase.strings.htmls import filt_base64, filt_htmltag, filt_js, filt_tag, filt_weixintag, parse_links
+from lebase.strings.htmls import filt_base64, filt_html_tags, filt_js, filt_tag, filt_wechat_tags, parse_links
 
 
 class TestHtmls(unittest.TestCase):
 
-    def test_filt_htmltag(self):
-        """测试filt_htmltag函数"""
+    def test_filt_html_tags(self):
+        """测试filt_html_tags函数"""
         html = "<p>这是一个<b>测试</b>文本</p>"
-        result = filt_htmltag(html)
+        result = filt_html_tags(html)
         self.assertEqual(result.strip(), "这是一个测试文本")
 
     def test_filt_tag(self):
@@ -33,10 +33,10 @@ class TestHtmls(unittest.TestCase):
         result = filt_js(html)
         self.assertEqual(result, "<p>文本</p><p>更多文本</p>")
 
-    def test_filt_weixintag(self):
-        """测试filt_weixintag函数"""
+    def test_filt_wechat_tags(self):
+        """测试filt_wechat_tags函数"""
         text = "图片/ Unsplash内容/图虫创意"
-        result = filt_weixintag(text)
+        result = filt_wechat_tags(text)
         self.assertEqual(result, "图片\n内容\n图\n")
 
     def test_parse_links(self):

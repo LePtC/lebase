@@ -103,7 +103,7 @@ def is_convertible_to_int(value):
         return False
 
 
-def safe_str_int(value):
+def str_safe_int(value):
     try:
         return str(int(value))
     except (ValueError, TypeError, OverflowError):

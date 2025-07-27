@@ -4,16 +4,16 @@
 """
 import unittest
 
-from lebase.strings.operates import filt_blank, filt_dupblank, mma_replace, trim_tail
+from lebase.strings.operates import filt_blank, filt_dupblank, replace_rule, trim_tail
 
 
 class TestOperates(unittest.TestCase):
 
-    def test_mma_replace(self):
-        """测试mma_replace函数"""
+    def test_replace_rule(self):
+        """测试replace_rule函数"""
         s = "这是一个测试字符串"
         rule = {"测试": "示例", "字符串": "文本"}
-        result = mma_replace(s, rule)
+        result = replace_rule(s, rule)
         self.assertEqual(result, "这是一个示例文本")
 
     def test_trim_tail(self):

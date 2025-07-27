@@ -8,7 +8,7 @@ import re
 from lebase.safes import ensure_str
 
 
-def mma_replace(s, rule):
+def replace_rule(s, rule):
     """
     约等于 MMA 的 /. 功能
     仅适用于字符串
@@ -36,7 +36,7 @@ def filt_blank(s, rule=None):
     if rule is None:
         rule = ["\n", "\r", "\t", " ", "&nbsp;"]
 
-    return mma_replace(ensure_str(s).strip(), {x: "" for x in rule})
+    return replace_rule(ensure_str(s).strip(), {x: "" for x in rule})
 
 
 def filt_dupblank(text):

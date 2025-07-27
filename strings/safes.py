@@ -14,7 +14,7 @@ def str_safe(txt):
     """
     安全字符串处理
     """
-    return non_cn_encode(ensure_str(txt))
+    return encode_non_chinese(ensure_str(txt))
 
 
 def str_maxlen(txt, maxlen=60):
@@ -27,14 +27,14 @@ def str_maxlen(txt, maxlen=60):
         return txt
 
 
-def strlog(txt, maxlen=60):
+def str_log(txt, maxlen=60):
     """
     日志安全字符串处理
     """
-    return str_maxlen(non_cn_encode(ensure_str(txt)), maxlen)
+    return str_maxlen(encode_non_chinese(ensure_str(txt)), maxlen)
 
 
-def filt_nonchar(sentence):
+def filt_non_char(sentence):
     """
     过滤非中英文和数字
     cite: https://blog.csdn.net/keyue123/article/details/96436131
@@ -44,7 +44,7 @@ def filt_nonchar(sentence):
     return re.sub("[^\u4e00-\u9fa5^a-z^A-Z^0-9]", "", sentence)
 
 
-def filt_non_cn(sentence):
+def filt_non_chinese(sentence):
     """
     过滤非中文字符
     """
@@ -89,7 +89,7 @@ def sanitize_filename(filename):
     return sanitized
 
 
-def non_cn_encode(txt):
+def encode_non_chinese(txt):
     """
     编码非中文字符
     """
@@ -97,14 +97,14 @@ def non_cn_encode(txt):
         "[^ -~^\\u4e00-\\u9fa5^，^。^？^！^、^；^：^“^”（^）^《^》^〈^〉^【^】^『^』^「^」^﹃^﹄^〔^〕]"
     )
 
-    def url_encode_replace(matchobj):
+    def replace_url_encode(matchobj):
         # print("  -  ", matchobj.group(0))
         return parse.quote(matchobj.group(0))
 
-    return reg_cn.sub(url_encode_replace, ensure_str(txt))
+    return reg_cn.sub(replace_url_encode, ensure_str(txt))
 
 
-def non_cn_decode(txt):
+def decode_non_chinese(txt):
     """
     解码非中文字符
     """

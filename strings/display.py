@@ -7,7 +7,7 @@ import sys
 import unicodedata
 
 
-def sizeof_fmt(num, suffix="", digits=1, lower_k=False):
+def fmt_size(num, suffix="", digits=1, lower_k=False):
     """
     将字节数（或任意数值）转换为可读性更高的字符串表示，自动选择合适的单位（K/M/G/T/P/E/Z/Y）。
 
@@ -21,10 +21,10 @@ def sizeof_fmt(num, suffix="", digits=1, lower_k=False):
         str：格式化后的字符串，如 '1.2M'、'512K'、'100'。
 
     示例：
-        sizeof_fmt(1024) -> '1.0K'
-        sizeof_fmt(1024, digits=0) -> '1K'
-        sizeof_fmt(1536, digits=0, lower_k=True) -> '2k'
-        sizeof_fmt(1048576) -> '1.0M'
+        fmt_size(1024) -> '1.0K'
+        fmt_size(1024, digits=0) -> '1K'
+        fmt_size(1536, digits=0, lower_k=True) -> '2k'
+        fmt_size(1048576) -> '1.0M'
     """
     units = ["", "K", "M", "G", "T", "P", "E", "Z", "Y"]
     if lower_k:
@@ -38,7 +38,7 @@ def sizeof_fmt(num, suffix="", digits=1, lower_k=False):
     return (fmt % num) + "Y" + suffix
 
 
-def strpad(any_input, target_width=16):
+def str_pad(any_input, target_width=16):
     """
     根据字符宽度（全角字符计2，半角字符计1）计算字符串宽度，
     若不足 target_width，则在末尾补充空格直到达到 target_width。
@@ -65,7 +65,7 @@ def strpad(any_input, target_width=16):
     return s
 
 
-def strli(lst, name=""):
+def str_lst(lst, name=""):
     """
     格式化打印列表信息
     """
@@ -74,7 +74,7 @@ def strli(lst, name=""):
         if length < 6:
             ret = f"{lst}"
         else:
-            n = list_length_classifier(length)
+            n = lst_len_classifier(length)
             abbr = f"{lst[:n]}"[:-1] + " ... " + f"{lst[-n:]}"[1:]
 
             ret = f"{abbr} len={length}"
@@ -86,7 +86,7 @@ def strli(lst, name=""):
     return ret
 
 
-def list_length_classifier(length):
+def lst_len_classifier(length):
     """
     列表长度分类器
     """
@@ -128,9 +128,18 @@ def get_len_zh2(txt):
 
 
 if __name__ == "__main__":
+
     # 示例用法
-    print("文件大小格式化:", sizeof_fmt(1024))
-    print("字符串补齐:", repr(strpad("测试", 10)))
+    print("文件大小格式化:", fmt_size(1024))
+    print("字符串补齐:", repr(str_pad("测试", 10)))
     test_list = [1, 2, 3, 4, 5, 6, 7, 8]
-    print("列表显示:", strli(test_list, "测试列表"))
+    print("列表显示:", str_lst(test_list, "测试列表"))
     print("中文字符串长度:", get_len_zh2("中文abc"))
+
+    import time
+
+    # 示例使用
+    length = [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 19, 20, 22, 33]
+    for n in length:
+        print_1line(str_lst(list(range(n))))
+        time.sleep(1)

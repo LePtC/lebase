@@ -5,14 +5,14 @@
 import unittest
 
 from lebase.strings.safes import (
-    filt_non_cn,
-    filt_nonchar,
-    non_cn_decode,
-    non_cn_encode,
+    decode_non_chinese,
+    encode_non_chinese,
+    filt_non_char,
+    filt_non_chinese,
     sanitize_filename,
+    str_log,
     str_maxlen,
     str_safe,
-    strlog,
 )
 
 
@@ -36,22 +36,22 @@ class TestSafes(unittest.TestCase):
         result = str_maxlen(txt, maxlen=10)
         self.assertEqual(result, "短字符串")
 
-    def test_strlog(self):
-        """测试strlog函数"""
+    def test_str_log(self):
+        """测试str_log函数"""
         txt = "这是一个测试©字符串"
-        result = strlog(txt, maxlen=5)
+        result = str_log(txt, maxlen=5)
         self.assertIn(" ... ", result)
 
-    def test_filt_nonchar(self):
-        """测试filt_nonchar函数"""
+    def test_filt_non_char(self):
+        """测试filt_non_char函数"""
         sentence = "这是一个Test123测试！@#字符串"
-        result = filt_nonchar(sentence)
+        result = filt_non_char(sentence)
         self.assertEqual(result, "这是一个Test123测试字符串")
 
-    def test_filt_non_cn(self):
-        """测试filt_non_cn函数"""
+    def test_filt_non_chinese(self):
+        """测试filt_non_chinese函数"""
         sentence = "这是一个Test测试字符串123!@#"
-        result = filt_non_cn(sentence)
+        result = filt_non_chinese(sentence)
         # 根据函数实际行为，该函数保留中文、英文、数字和一些中文标点
         # 但测试表明!@#并未被过滤，这说明正则表达式没有匹配这些字符
         # 我们根据实际结果更新测试期望值
@@ -67,18 +67,18 @@ class TestSafes(unittest.TestCase):
         result = sanitize_filename("")
         self.assertEqual(result, "未命名")
 
-    def test_non_cn_encode(self):
-        """测试non_cn_encode函数"""
+    def test_encode_non_chinese(self):
+        """测试encode_non_chinese函数"""
         txt = "这是一个test测试"
-        result = non_cn_encode(txt)
+        result = encode_non_chinese(txt)
         self.assertIn("这是一个", result)
         self.assertIn("测试", result)
 
-    def test_non_cn_decode(self):
-        """测试non_cn_decode函数"""
+    def test_decode_non_chinese(self):
+        """测试decode_non_chinese函数"""
         txt = "这是一个test测试"
-        encoded = non_cn_encode(txt)
-        result = non_cn_decode(encoded)
+        encoded = encode_non_chinese(txt)
+        result = decode_non_chinese(encoded)
         # 由于编码和解码过程，应该恢复原始文本
         self.assertIn("这是一个", result)
         self.assertIn("测试", result)
