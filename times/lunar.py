@@ -1,7 +1,7 @@
 import os
 from typing import Dict, List, Tuple
 
-from lebase.strings import replace_rule
+from lebase.strings.operates import replace_rule
 from lebase.times.format import any2unix, unix2str
 from lefile.csv import read_csv
 from lelog.logs import log

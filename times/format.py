@@ -68,7 +68,7 @@ from datetime import time as datetime_time
 from typing import Optional, Union
 
 from lebase.ensures import ensure_num
-from lebase.strings import replace_rule
+from lebase.strings.operates import replace_rule
 from lelog.logs import log
 
 
