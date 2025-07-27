@@ -5,9 +5,10 @@
 """
 import sys
 import unicodedata
+from typing import List, Union
 
 
-def fmt_size(num, suffix="", digits=1, lower_k=False):
+def fmt_size(num: Union[float, int], suffix: str = "", digits: int = 1, lowerK: bool = False) -> str:
     """
     将字节数（或任意数值）转换为可读性更高的字符串表示，自动选择合适的单位（K/M/G/T/P/E/Z/Y）。
 
@@ -15,7 +16,7 @@ def fmt_size(num, suffix="", digits=1, lower_k=False):
         num (float|int)：待转换的数值（如字节数）。
         suffix (str)：单位后缀，默认为空字符串。
         digits (int)：小数点保留位数，默认为1。若为0则为整数。
-        lower_k (bool)：是否将K单位小写（如k、M、G...），默认为False（K大写）。
+        lowerK (bool)：是否将K单位小写（如k、M、G...），默认为False（K大写）。
 
     返回：
         str：格式化后的字符串，如 '1.2M'、'512K'、'100'。
@@ -23,11 +24,11 @@ def fmt_size(num, suffix="", digits=1, lower_k=False):
     示例：
         fmt_size(1024) -> '1.0K'
         fmt_size(1024, digits=0) -> '1K'
-        fmt_size(1536, digits=0, lower_k=True) -> '2k'
+        fmt_size(1536, digits=0, lowerK=True) -> '2k'
         fmt_size(1048576) -> '1.0M'
     """
     units = ["", "K", "M", "G", "T", "P", "E", "Z", "Y"]
-    if lower_k:
+    if lowerK:
         units[1] = "k"
     for unit in units:
         if abs(num) < 1024.0:
@@ -38,7 +39,7 @@ def fmt_size(num, suffix="", digits=1, lower_k=False):
     return (fmt % num) + "Y" + suffix
 
 
-def str_pad(any_input, target_width=16):
+def str_pad(anyInput: Union[str, int, float], targetWidth: int = 16) -> str:
     """
     根据字符宽度（全角字符计2，半角字符计1）计算字符串宽度，
     若不足 target_width，则在末尾补充空格直到达到 target_width。
@@ -50,22 +51,22 @@ def str_pad(any_input, target_width=16):
     返回:
       补齐空格后的字符串
     """
-    current_width = 0
-    s = str(any_input)
+    currentWidth = 0
+    s = str(anyInput)
     for ch in s:
         # 如果字符为全角或宽字符，则计宽度2，否则计1
         if unicodedata.east_asian_width(ch) in ("F", "W"):
-            current_width += 2
+            currentWidth += 2
         else:
-            current_width += 1
+            currentWidth += 1
 
     # 如果宽度不足，补足空格
-    if current_width < target_width:
-        s += " " * (target_width - current_width)
+    if currentWidth < targetWidth:
+        s += " " * (targetWidth - currentWidth)
     return s
 
 
-def str_lst(lst, name=""):
+def str_lst(lst: List, name: str = "") -> str:
     """
     格式化打印列表信息
     """
@@ -86,7 +87,7 @@ def str_lst(lst, name=""):
     return ret
 
 
-def lst_len_classifier(length):
+def lst_len_classifier(length: int) -> int:
     """
     列表长度分类器
     """
@@ -97,7 +98,7 @@ def lst_len_classifier(length):
     return 6
 
 
-def print_single_line(msg):
+def print_single_line(msg: str) -> None:
     """\r 是回车符，将光标移到当前行的开头
     end 参数防止 print 函数输出新行
     flush() 强制刷新输出缓冲区，确保消息立即显示
@@ -106,7 +107,7 @@ def print_single_line(msg):
     sys.stdout.flush()
 
 
-def get_len_zh2(txt):
+def get_len_zh2(txt: Union[str, int, float]) -> int:
     """
     返回字符串的显示宽度：
     - 中文宽度2
@@ -115,16 +116,16 @@ def get_len_zh2(txt):
     :param txt: 字符串
     :return: 显示宽度
     """
-    tree_chars = set("│├└─")
-    real_len = 0
+    treeChars = set("│├└─")
+    realLen = 0
     for ch in str(txt):
         if "\u4e00" <= ch <= "\u9fff":  # 中文
-            real_len += 2
-        elif ch in tree_chars:
-            real_len += 1
+            realLen += 2
+        elif ch in treeChars:
+            realLen += 1
         else:
-            real_len += 1
-    return real_len
+            realLen += 1
+    return realLen
 
 
 if __name__ == "__main__":
@@ -132,8 +133,8 @@ if __name__ == "__main__":
     # 示例用法
     print("文件大小格式化:", fmt_size(1024))
     print("字符串补齐:", repr(str_pad("测试", 10)))
-    test_list = [1, 2, 3, 4, 5, 6, 7, 8]
-    print("列表显示:", str_lst(test_list, "测试列表"))
+    testList = [1, 2, 3, 4, 5, 6, 7, 8]
+    print("列表显示:", str_lst(testList, "测试列表"))
     print("中文字符串长度:", get_len_zh2("中文abc"))
 
     import time

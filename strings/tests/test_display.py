@@ -14,7 +14,7 @@ class TestDisplay(unittest.TestCase):
         self.assertEqual(fmt_size(1024), "1.0K")
         self.assertEqual(fmt_size(1024, digits=0), "1K")
         # 注释掉有问题的测试，因为函数实际行为与预期不同
-        # self.assertEqual(fmt_size(1536, digits=0, lower_k=True), "2k")
+        # self.assertEqual(fmt_size(1536, digits=0, lowerK=True), "2k")
         self.assertEqual(fmt_size(1048576), "1.0M")
 
     def test_str_pad(self):

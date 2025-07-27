@@ -4,11 +4,12 @@
 包含字符串替换、修剪等操作功能
 """
 import re
+from typing import Dict, List, Optional, Union
 
 from lebase.ensures import ensure_str
 
 
-def replace_rule(s, rule):
+def replace_rule(s: str, rule: Dict[str, str]) -> str:
     """
     约等于 MMA 的 /. 功能
     仅适用于字符串
@@ -19,7 +20,7 @@ def replace_rule(s, rule):
     return s
 
 
-def trim_tail(s, t):
+def trim_tail(s: str, t: str) -> str:
     """
     去除字符串尾部指定字符串
     """
@@ -29,7 +30,7 @@ def trim_tail(s, t):
         return s
 
 
-def filt_blank(s, rule=None):
+def filt_blank(s: Union[str, bytes], rule: Optional[List[str]] = None) -> str:
     """
     清除指定的空白字符
     """
@@ -39,7 +40,7 @@ def filt_blank(s, rule=None):
     return replace_rule(ensure_str(s).strip(), {x: "" for x in rule})
 
 
-def filt_dup_blank(text):
+def filt_dup_blank(text: str) -> str:
     """
     清除连续重复的空格和换行符
     """

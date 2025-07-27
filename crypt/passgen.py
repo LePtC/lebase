@@ -2,8 +2,8 @@
 """
 生成所需长度的随机字符串密码
 """
-import string
 import random
+import string
 
 
 def generate_random_password(length, char_set="1a"):

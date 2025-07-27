@@ -1,7 +1,8 @@
 import re
+from typing import List
 
 
-def parse_numbers(input_string: str) -> list:
+def parse_numbers(inputString: str) -> List[int]:
     """
     从输入字符串中提取所有连续数字序列，并以 int 列表形式返回。
 
@@ -12,11 +13,11 @@ def parse_numbers(input_string: str) -> list:
     list[int]: 提取到的所有数字序列（整型列表）
     """
     # \d+ 表示匹配一个或多个连续数字
-    digit_strings = re.findall(r"\d+", input_string)
-    return list(map(int, digit_strings))
+    digitStrings = re.findall(r"\d+", inputString)
+    return list(map(int, digitStrings))
 
 
-def parse_urls(text: str) -> list:
+def parse_urls(text: str) -> List[str]:
     r"""
     传入一个包含文本的字符串，从中提取所有形式的URL，返回它们组成的列表。
     1. 支持以 http:// 或 https:// 开头

@@ -28,18 +28,18 @@ class TestSafes(unittest.TestCase):
     def test_str_maxlen(self):
         """测试str_maxlen函数"""
         txt = "这是一个非常长的测试字符串，用于测试截断功能"
-        result = str_maxlen(txt, maxlen=5)
+        result = str_maxlen(txt, maxLen=5)
         self.assertIn(" ... ", result)
 
         # 测试短字符串
         txt = "短字符串"
-        result = str_maxlen(txt, maxlen=10)
+        result = str_maxlen(txt, maxLen=10)
         self.assertEqual(result, "短字符串")
 
     def test_str_log(self):
         """测试str_log函数"""
         txt = "这是一个测试©字符串"
-        result = str_log(txt, maxlen=5)
+        result = str_log(txt, maxLen=5)
         self.assertIn(" ... ", result)
 
     def test_filt_non_char(self):
