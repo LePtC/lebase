@@ -57,17 +57,17 @@ def get_dic_path(dic, path):
     return value
 
 
-def lidic_remove_dupkey(liDic):
-    """暂时要求传入liDic已sort好"""
+def lidic_remove_dupkey(lstDic):
+    """暂时要求传入lstDic已sort好"""
     # keys = []
     lastkey = ""
     ret = []
-    for d in liDic:
+    for d in lstDic:
         # if d['_id'] not in keys: # too slow
         if d["_id"] != lastkey:
             ret.append(d)
             lastkey = d["_id"]
-    print(f"lidic_remove_dupkey: len in: {len(liDic)} out: {len(ret)}")
+    print(f"lidic_remove_dupkey: len in: {len(lstDic)} out: {len(ret)}")
     return ret
 
 
