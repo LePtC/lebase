@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Level 0.5（可被 lebase.times 引用）
-times 更高阶，因此 ensure_taskId 放在 times
+times 更高阶，因此 ensure_taskid 放在 times
 """
 import io
 import math
@@ -11,7 +11,7 @@ import math
 # ----------------------------
 
 
-def ensure_str(s):
+def ensure_str(s) -> str:
     """
     一个比 str 更普适的强制字符串转换（对于 MongoId Object 可以返回 print 出的字串）
     """
@@ -70,7 +70,7 @@ def ensure_num(strOrNum):
             return -1
 
 
-def ensure_numstr(strOrNum, tofix=4):
+def ensure_numstr(strOrNum, tofix=4) -> str:
     """
     如果传入的是字符串，则返回字符串
     如果是 int，则返回无小数位字符串
@@ -83,7 +83,7 @@ def ensure_numstr(strOrNum, tofix=4):
     return format(float(strOrNum), "." + str(int(tofix)) + "f")
 
 
-def ensure_quoted(path):
+def ensure_quoted(path) -> str:
     # 检查路径两端是否有引号
     if not (path.startswith('"') and path.endswith('"')):
         return f'"{path}"'  # 添加引号
@@ -95,7 +95,7 @@ def ensure_quoted(path):
 # ----------------------------
 
 
-def is_convertible_to_int(value):
+def is_convertible_to_int(value) -> bool:
     try:
         test = int(value)
         return isinstance(test, (int, float)) and not math.isnan(test) and math.isfinite(test)
@@ -103,7 +103,7 @@ def is_convertible_to_int(value):
         return False
 
 
-def str_safe_int(value):
+def str_safe_int(value) -> str:
     try:
         return str(int(value))
     except (ValueError, TypeError, OverflowError):

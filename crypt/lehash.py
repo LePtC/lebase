@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 由于MD5模块在python3中被移除， 在python3中使用hashlib模块进行md5操作
 
 250203 js2py 报错不适配 py3.12 待MR
 https://github.com/PiotrDabkowski/Js2Py/pull/327/files
-'''
+"""
 
 import base64
 import hashlib
@@ -36,7 +36,7 @@ def unpad(s):
 # 生成MD5
 def get_md5(txt):
     # 创建md5对象
-    hl = hashlib.md5()
+    hl = hashlib.md5()  # noqa: S324
 
     # Tips
     # 此处必须声明encode
@@ -55,7 +55,7 @@ def get_sha(txt):
 KOU_LIN = "赞赞赞"
 
 
-def getRuleKey(kou, t):
+def get_rule_key(kou, t):
     s = get_sha("=".join(list(kou + str(t)))) + "23679BDEFkLMoprsXz1458ACGhJNQTyUVWdaf0gblentcuxSimj"
     return s[:32]
 
@@ -85,13 +85,13 @@ def decrypt(ct, key):
 # 最终封装，与 js 同款的一键把 dict 按狸子 DIY 协议加密打包
 def dic2enc(dic, kouling):
     t = time.time()
-    s = getRuleKey(kouling, t)
+    s = get_rule_key(kouling, t)
     return {"r": t, "c": encrypt(json.dumps(dic), s).decode("utf-8")}  # 后端无需把 p 给前端验密
 
 
 def dic2dec(dic, kouling):
     t = dic["r"]
-    s = getRuleKey(kouling, t)
+    s = get_rule_key(kouling, t)
     return json.loads(decrypt(dic["c"], s))
 
 
@@ -103,7 +103,7 @@ if __name__ == "__main__":
     # print(en("💐🌸💮🏵️🌹🥀🌺🌻🌼🌷🌱🌲🌳🌴🌵🌾🌿☘️🍀🍁🍂🍃"))
     # print(de(en("💐🌸💮🏵️🌹🥀🌺🌻🌼🌷🌱🌲🌳🌴🌵🌾🌿☘️🍀🍁🍂🍃")))
 
-    # kl = getRuleKey(KOU_LIN, '1642520275.003')
+    # kl = get_rule_key(KOU_LIN, '1642520275.003')
     # print(kl)
     # print((kl[:16]).encode("utf-8"))
     # ct = encrypt("a secret message 啊啊", "26f3ee35dffad70acfa78706c1fe3a89")
@@ -121,6 +121,6 @@ if __name__ == "__main__":
     #     x += x*128 + li[i]
     # print(x)
 
-    kl = getRuleKey("xxx", "1663313945.4672966")
+    kl = get_rule_key("xxx", "1663313945.4672966")
     ct = "OLcE7AMhZL8p2dnKXDhJsZqyuLp9gDljrfiTojJtSfwXpW8q+5DCxwXW3ZhibJeyhENy1xNi0xbAzf6TeczrQFQfBKMh4HD8XMGG1ysjS0+2WlD3lCXIH5q9EpUKQsqXvCI/AOyjnr9Z/eLLCrVnGrm8/a7aByh+4yvDv7W82xGDW/+I6cq6M20y9PYNdKLU2NOKMf7KJek+m8NFpfNK+g=="
     print(decrypt(ct, kl))

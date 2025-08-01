@@ -53,7 +53,8 @@ def parse_links(html: str) -> List[str]:
     soup = BeautifulSoup(html, "html.parser")
     links = []
     for a in soup.find_all("a"):
-        href = a.get("href")
+        # 使用 getattr 避免类型检查错误
+        href = getattr(a, "get", lambda x: None)("href")
         if href and href not in links:
             links.append(href)
     return links

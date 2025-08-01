@@ -8,7 +8,104 @@ from lebase.ensures import ensure_num
 # django request 转 ip 和时间戳验密
 # ----------------------------
 
-LAST_PASS_TIME = 0  # 假设低并发，则真正的用户每次验密时间必不同，防密钥重放攻击
+
+class RequestValidator:
+    """请求验证器，用于防止时间戳重放攻击"""
+
+    def __init__(self):
+        self.last_pass_time = 0  # 假设低并发，则真正的用户每次验密时间必不同，防密钥重放攻击
+
+    def get_last_pass_time(self):
+        return self.last_pass_time
+
+    def set_last_pass_time(self, time_value):
+        self.last_pass_time = time_value
+
+
+# 创建全局实例
+request_validator = RequestValidator()
+
+
+def _extract_request_data(request):
+    """提取请求数据并设置编码"""
+    request.encoding = "utf-8"
+    req = json.loads(request.body)
+
+    # 保存 ip 和 meta 信息
+    x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")  # 判断是否使用代理
+    if x_forwarded_for:
+        req["ip"] = x_forwarded_for.split(",")[0]  # 使用代理获取真实的ip
+        req["ip-agent"] = x_forwarded_for
+    else:
+        req["ip"] = request.META.get("REMOTE_ADDR")  # 未使用代理获取IP
+
+    req["ua"] = request.META["HTTP_USER_AGENT"]
+    return req
+
+
+def _validate_timestamp(req):
+    """验证时间戳"""
+    rtime = req.get("r", 0)
+    t = ensure_num(rtime)
+
+    if t == 0:
+        return "❌ time 0", t
+    elif t < time.time() - 60:
+        return "❌ time too old", t
+    elif t > time.time() + 60:
+        return "❌ time too future", t
+    elif request_validator.get_last_pass_time() + 0.01 >= t:  # 重复使用时间戳
+        return "❌ time reuse", t
+    else:
+        return "🟢 time pass", t
+
+
+def _validate_username(req, colUser, rtime):
+    """验证用户名"""
+    p = ""
+    passSHA = req.get("p", "")
+    px = None
+
+    for x in colUser.find({}):
+        kou = "-".join(list(x["_id"] + str(rtime)))
+        kouSHA = get_sha(kou)
+        if passSHA == kouSHA:
+            p = x["_id"]
+            px = x
+            break
+
+    if not p:
+        return "❌ 用户名不认识", p, px
+    else:
+        req["p"] = p
+        return "🟢 name pass", p, px
+
+
+def _validate_ip(req, px):
+    """验证IP地址"""
+    liIp = px.get("ip", [])
+    isAllowIp = False
+
+    if liIp == "*":
+        isAllowIp = True
+    elif req["ip"]:  # ip信息为空则不通过
+        for goodIP in liIp:
+            if "*" in goodIP:
+                if req["ip"].startswith(goodIP.replace("*", "")):
+                    isAllowIp = True
+            elif req["ip"] == goodIP:
+                isAllowIp = True
+
+    if not isAllowIp:
+        return "❌ ip不认识"
+    else:
+        return "🟢 ip pass"
+
+
+def _decrypt_content(req, rtime):
+    """解密内容"""
+    if req.get("c", ""):
+        req["c"] = dic2dec({"r": rtime, "c": req.get("c", "")}, req["p"])
 
 
 def request2dec(request, colUser, colReq):
@@ -33,103 +130,42 @@ def request2dec(request, colUser, colReq):
     colReq：每次请求的数据入库
         缺点：如果用户输入错误密码（库里不认识的密码）那后端也不知道他输的是啥…
     """
-    global LAST_PASS_TIME
+    # 提取请求数据
+    req = _extract_request_data(request)
 
-    request.encoding = "utf-8"
-    req = json.loads(request.body)
-
-    # 保存 ip 和 meta 信息
-    x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")  # 判断是否使用代理
-    if x_forwarded_for:
-        req["ip"] = x_forwarded_for.split(",")[0]  # 使用代理获取真实的ip
-        req["ip-agent"] = x_forwarded_for
-    else:
-        req["ip"] = request.META.get("REMOTE_ADDR")  # 未使用代理获取IP
-
-    req["ua"] = request.META["HTTP_USER_AGENT"]
-
-    # ----------------------------
-    # 先看时间戳
-    # ----------------------------
-    rtime = req.get("r", 0)
-
-    t = ensure_num(rtime)
-    if t == 0:
-        m = "❌ time 0"
-    elif t < time.time() - 60:
-        m = "❌ time too old"
-    elif t > time.time() + 60:
-        m = "❌ time too future"
-    elif LAST_PASS_TIME + 0.01 >= t:  # 重复使用时间戳
-        m = "❌ time reuse"
-    else:
-        m = "🟢 time pass"
+    # 验证时间戳
+    time_msg, t = _validate_timestamp(req)
 
     # 如果没有时间戳，则用户名和内容的解码都无法进行！
-    if m.startswith("❌ time 0"):
-        req["m"] = m
-        x = colReq.insert_one(req)
+    if time_msg.startswith("❌ time 0"):
+        req["m"] = time_msg
+        colReq.insert_one(req)
         # print('request2dec:', x, req)
-        return {"m": m}
+        return {"m": time_msg}
 
-    # ----------------------------
-    # 用户名校验
-    # ----------------------------
-    p = ""
-    passSHA = req.get("p", "")
-    for x in colUser.find({}):
-        kou = "-".join(list(x["_id"] + str(rtime)))
-        kouSHA = get_sha(kou)
-        if passSHA == kouSHA:
-            p = x["_id"]
-            px = x
-            break
+    # 验证用户名
+    name_msg, p, px = _validate_username(req, colUser, req.get("r", 0))
+    m = name_msg + " " + time_msg
 
-    if not p:
-        m = "❌ 用户名不认识 " + m
-    else:
-        m = "🟢 name pass " + m
-        req["p"] = p
-
-    # ----------------------------
     # 只要认识用户名就应该将消息解密存储
-    # ----------------------------
-    if "name pass" in m:
+    if "name pass" in name_msg:
+        # 解密内容
+        _decrypt_content(req, req.get("r", 0))
 
-        if req.get("c", ""):
-            req["c"] = dic2dec({"r": rtime, "c": req.get("c", "")}, req["p"])
+        # 验证IP
+        ip_msg = _validate_ip(req, px)
+        m = ip_msg + " " + m
 
-        # ----------------------------
-        # ip 校验
-        # ----------------------------
-        liIp = px.get("ip", [])
-        isAllowIp = False
-        if liIp == "*":
-            isAllowIp = True
-        if req["ip"]:  # ip信息为空则不通过
-            for goodIP in liIp:
-                if "*" in goodIP:
-                    if req["ip"].startswith(goodIP.replace("*", "")):
-                        isAllowIp = True
-                elif req["ip"] == goodIP:
-                    isAllowIp = True
-
-        if not isAllowIp:
-            m = "❌ ip不认识 " + m
-        else:
-            m = "🟢 ip pass " + m
-
-    # ----------------------------
     # 在通过以上所有校验后
-    # ----------------------------
     req["m"] = m
     req["_id"] = time.time()
-    x = colReq.insert_one(req)
+    colReq.insert_one(req)
+
     if "❌" in req["m"]:
         # print('request2dec ❌:', x, req)
         return {"m": m}
     else:
-        LAST_PASS_TIME = t
-        print("LAST_PASS_TIME:", LAST_PASS_TIME)
+        request_validator.set_last_pass_time(t)
+        print("LAST_PASS_TIME:", request_validator.get_last_pass_time())
         # print('request2dec PASSED:', x, req)
         return req
