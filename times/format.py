@@ -65,7 +65,7 @@ import re
 import time
 from datetime import date, datetime, timedelta
 from datetime import time as datetime_time
-from typing import Optional, Union
+from typing import Union
 
 from lebase.ensures import ensure_num
 from lebase.strings.operates import replace_rule
@@ -84,7 +84,7 @@ def convert_to_unix(dt: datetime) -> float:
         return time.mktime(dt.timetuple()) + dt.microsecond / 1e6
 
 
-def any2unix(timeVar: Union[str, int, float, tuple, datetime, None], fmt: str = "") -> Optional[float]:
+def any2unix(timeVar: Union[str, int, float, tuple, datetime], fmt: str = "") -> float:
     """
     将任意格式的时间变量转换为 Unix 时间戳（秒）。
     支持的类型包括：datetime对象、数字、元组、字符串等。
@@ -120,17 +120,20 @@ def any2unix(timeVar: Union[str, int, float, tuple, datetime, None], fmt: str = 
             return float(ts)
         except Exception as e:
             log.warning("无法将元组转换为时间戳: " + str(e))
-            return None
+            return -1
 
     # 4. 字符串类型
     if isinstance(timeVar, str):
         text = timeVar.strip()
         if not text:
             log.warning("空字符串无法解析")
-            return None
+            return -1
 
         if fmt:
-            return _str2unix(timeVar, fmt)
+            result = _str2unix(timeVar, fmt)
+            if result is None:
+                return -1
+            return result
 
         # 去除可能的前导 '@'
         if text.startswith("@"):
@@ -193,11 +196,11 @@ def any2unix(timeVar: Union[str, int, float, tuple, datetime, None], fmt: str = 
                 dt = dtParser.parse(text, fuzzy=True)
             except Exception as e:
                 log.warning("dateutil.parser 解析异常: " + str(e))
-                return None
+                return -1
 
         if not dt:
             log.warning("无法解析时间字符串: " + text)
-            return None
+            return -1
 
         # 如果解析结果仅包含日期（时分秒均为 0），且原字符串中不包含明显的时间信息，则默认设为中午 12 点
         if dt.hour == 0 and dt.minute == 0 and dt.second == 0:
@@ -209,7 +212,7 @@ def any2unix(timeVar: Union[str, int, float, tuple, datetime, None], fmt: str = 
         return convert_to_unix(dt)
 
     log.warning("无法识别的时间类型: " + str(type(timeVar)))
-    return None
+    return -1
 
 
 def str2tuple(timeStr: str, fmt: str = "") -> time.struct_time:
@@ -221,7 +224,10 @@ def str2tuple(timeStr: str, fmt: str = "") -> time.struct_time:
 def _str2unix(timeStr: str, fmt: str = "") -> float:
     """字符串时间转unix时间，仅内部使用，外部应该用any2unix"""
     s = str(timeStr)
-    return int(time.mktime(str2tuple(s, fmt)))
+    try:
+        return float(time.mktime(str2tuple(s, fmt)))
+    except Exception:
+        return -1.0
 
 
 def unix2str(unixTime: float = 0.0, fmt: str = "%Y%m%d%H%M%S") -> str:
@@ -265,15 +271,15 @@ def unix2taskId(rtime=0.0, offset=0.0):
         return time.strftime("%Y%m%d", now) + str(hourt)
 
 
-def any2taskId(anytime, length=10):
+def any2taskid(anytime):
     """
     任意格式智能识别然后转 taskId
-    替换原 any2taskId、str2taskId
+    替换原 any2taskid、str2taskId
     """
     return unix2taskId(any2unix(anytime))
 
 
-def is_taskId(f):
+def is_taskid(f):
     """
     注：只认 8 位数且 11 点触发的是 taskId
     """
@@ -534,7 +540,8 @@ def convert_to_timestamp(filename):
         timestamp = int(time.mktime(date_obj.timetuple())) + 12 * 3600
         return timestamp
     else:
-        return "日期格式不正确"
+        # return "日期格式不正确"
+        return -1
 
 
 def is_rtime(s):

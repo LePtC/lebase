@@ -1,5 +1,6 @@
-from lebase.times.clock import logtime, Clock
 import time
+
+from lebase.times.clock import Clock, logtime
 
 
 def test_logtime():
@@ -16,4 +17,5 @@ def test_clock_context():
 
 if __name__ == "__main__":
     import pytest
+
     pytest.main([__file__])

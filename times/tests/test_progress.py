@@ -1,5 +1,6 @@
-from lebase.times.progress import Progress
 import time
+
+from lebase.times.progress import Progress
 
 
 def test_progress_basic():
@@ -11,4 +12,5 @@ def test_progress_basic():
 
 if __name__ == "__main__":
     import pytest
+
     pytest.main([__file__])

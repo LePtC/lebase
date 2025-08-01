@@ -2,13 +2,14 @@
 """
 日期区间与推算相关函数
 """
+import time
 from datetime import datetime, timedelta
 from typing import List
 
-from lebase.times.format import any2taskId, any2unix, unix2str, unix2taskId
+from lebase.times.format import any2taskid, any2unix, unix2str, unix2taskId
 
 
-def convert_days_ago(daysString: str) -> datetime.timetuple:
+def convert_days_ago(daysString: str) -> time.struct_time:
     """应对newbing或B站智能把近期时间自动转x天前"""
     days = int(daysString.split("天前")[0])  # 提取天数
     newDate = datetime.now() - timedelta(days=days)  # 计算新日期
@@ -19,7 +20,7 @@ def cal_day_diff(timeStr1: str, timeStr2: str) -> float:
     return int((any2unix(timeStr1) - any2unix(timeStr2)) / 8640) / 10
 
 
-def taskId2ndayago(timeStr: str, days: float) -> str:
+def taskid_nday_ago(timeStr: str, days: float) -> str:
     """
     str2str(shifted) 时间平移函数
     在氘化氢 BYK 和 pyfac 里曾叫 few_days_ago
@@ -44,10 +45,10 @@ def time_str_list(startTime: str, endTime: str, interval: int = 12) -> List[str]
     # 生成时间列表
     timeList = range(int(uStart), int(uEnd) + 1, interval * 3600)
     # 转换回字符串格式
-    return [any2taskId(unix2str(_)) for _ in timeList]
+    return [any2taskid(unix2str(_)) for _ in timeList]
 
 
-def get_liTaskId_halfmonth(yearStart: int, monthStart: int, yearEnd: int, monthEnd: int) -> List[str]:
+def get_lst_taskid_halfmonth(yearStart: int, monthStart: int, yearEnd: int, monthEnd: int) -> List[str]:
     """
     输入：起止年月
     输出：半月精度的 timelist

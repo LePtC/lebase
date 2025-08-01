@@ -1,6 +1,7 @@
-from lebase.times import format
 import time
 from datetime import datetime
+
+from lebase.times import format
 
 
 def test_any2unix():
@@ -27,4 +28,5 @@ def test_unix2chs():
 
 if __name__ == "__main__":
     import pytest
+
     pytest.main([__file__])

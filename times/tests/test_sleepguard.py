@@ -1,5 +1,6 @@
-from lebase.times.sleepguard import SleepGuard
 import time
+
+from lebase.times.sleepguard import SleepGuard
 
 
 def test_sleepguard_basic():
@@ -10,4 +11,5 @@ def test_sleepguard_basic():
 
 if __name__ == "__main__":
     import pytest
+
     pytest.main([__file__])

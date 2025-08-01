@@ -2,8 +2,9 @@
 """
 休眠控制相关类
 """
-import time
 import random
+import time
+
 from lelog.logs import log
 
 
@@ -31,7 +32,7 @@ class SleepGuard:
         # 计算计划的总间隔时间（随机因子取值范围 [0,1)）
         self.planTime = self.minTime + self.plusRandom * random.uniform(0, 1)
         log.debug("初始化SleepGuard: planTime = {:.3f}秒".format(self.planTime))
-        self.startTime = None
+        self.startTime = -1
 
     def __enter__(self):
         # 记录进入上下文的时间

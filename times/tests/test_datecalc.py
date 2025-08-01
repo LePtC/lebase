@@ -1,6 +1,6 @@
-from lebase.times.datecalc import time_str_list, convert_days_ago, lastday_of_month
-
 import time
+
+from lebase.times.datecalc import convert_days_ago, lastday_of_month, time_str_list
 
 
 def test_convert_days_ago():
@@ -14,11 +14,12 @@ def test_lastday_of_month():
 
 
 def test_time_str_list():
-    lst = time_str_list('2020040611', '2020040723')
+    lst = time_str_list("2020040611", "2020040723")
     assert isinstance(lst, list)
-    assert lst[0].startswith('20200406')
+    assert lst[0].startswith("20200406")
 
 
 if __name__ == "__main__":
     import pytest
+
     pytest.main([__file__])
