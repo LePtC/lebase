@@ -6,7 +6,7 @@ import time
 from datetime import datetime, timedelta
 from typing import List
 
-from lebase.times.format import any2taskid, any2unix, unix2str, unix2taskId
+from lebase.times.format import any2taskid, any2unix, unix2str, unix2taskid
 
 
 def convert_days_ago(daysString: str) -> time.struct_time:
@@ -25,7 +25,7 @@ def taskid_nday_ago(timeStr: str, days: float) -> str:
     str2str(shifted) 时间平移函数
     在氘化氢 BYK 和 pyfac 里曾叫 few_days_ago
     """
-    return unix2taskId(any2unix(timeStr) - 3600 * 24 * days)
+    return unix2taskid(any2unix(timeStr) - 3600 * 24 * days)
 
 
 def time_str_list(startTime: str, endTime: str, interval: int = 12) -> List[str]:

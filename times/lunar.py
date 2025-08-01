@@ -6,8 +6,37 @@ from lebase.times.format import any2unix, unix2str
 from lefile.csv import read_csv
 from lelog.logs import log
 
-dicLunar: Dict[str, str] = {}
-dicHoliday: Dict[str, List[str]] = {}
+
+# 农历数据管理器
+class LunarData:
+    """农历数据管理器，避免使用全局变量"""
+
+    def __init__(self):
+        self.dic_lunar: Dict[str, str] = {}
+        self.dic_holiday: Dict[str, List[str]] = {}
+        self._loaded = False
+
+    def load_lunar(self) -> None:
+        """加载农历数据"""
+        if self._loaded:
+            return
+
+        # 假设 lunar.csv 就在当前目录
+        path = os.path.join(os.path.dirname(__file__), "lunar.csv")
+        # path = lev.fac / "lebase/times/lunar.csv"
+        nongli = read_csv(path)
+
+        def f(a: str, b: str) -> str:
+            return a if b in a else b
+
+        self.dic_lunar = {x[0].replace(".", ""): f(x[1], x[2]) for x in nongli}
+        self.dic_holiday = {x[0]: x[1:] for x in nongli}
+        self._loaded = True
+
+
+# 创建全局实例
+_lunar_data = LunarData()
+
 
 weekEngToChs: Dict[str, str] = {
     "Mon": "一",
@@ -20,30 +49,6 @@ weekEngToChs: Dict[str, str] = {
 }  # TODO 这个跟format里定义的不一样……
 
 
-# 只在首次调用时加载农历数据
-def load_lunar() -> None:
-    """
-    加载农历数据
-    """
-    global dicLunar
-    global dicHoliday
-    if not dicLunar or not dicHoliday:
-        # 假设 lunar.csv 就在当前目录
-        path = os.path.join(os.path.dirname(__file__), "lunar.csv")
-        # path = lev.fac / "lebase/times/lunar.csv"
-        nongli = read_csv(path)
-
-        if not dicLunar:
-
-            def f(a: str, b: str) -> str:
-                return a if b in a else b
-
-            dicLunar = {x[0].replace(".", ""): f(x[1], x[2]) for x in nongli}
-
-        if not dicHoliday:
-            dicHoliday = {x[0]: x[1:] for x in nongli}
-
-
 def str2lunar(dateStr: str) -> List[str]:
     """
     8位字符串时间转狸子日程用 info（周几，农历，节日，几岁）
@@ -54,15 +59,13 @@ def str2lunar(dateStr: str) -> List[str]:
     Returns:
         List[str]: [周几, 农历/节日]，如 ['六', '腊月廿九']
     """
-    global dicLunar
-    if not dicLunar:
-        load_lunar()
+    _lunar_data.load_lunar()
 
-    if dicLunar.get(str(dateStr), ""):
+    if _lunar_data.dic_lunar.get(str(dateStr), ""):
         t = any2unix(str(dateStr))
         if t is not None:
             w = replace_rule(str(unix2str(t, "%a")), weekEngToChs).replace("周", "")
-            ret = [w, dicLunar.get(str(dateStr), "")]
+            ret = [w, _lunar_data.dic_lunar.get(str(dateStr), "")]
             return ret
     return []
 
@@ -77,11 +80,9 @@ def get_lunar_holiday(now: float) -> Tuple[str, str]:
     Returns:
         Tuple[str, str]: (农历日期, 节日信息)
     """
-    global dicHoliday
-    if not dicHoliday:
-        load_lunar()
+    _lunar_data.load_lunar()
 
-    lunar = dicHoliday.get(unix2str(now, "%Y.%m.%d"), ["未查到"])
+    lunar = _lunar_data.dic_holiday.get(unix2str(now, "%Y.%m.%d"), ["未查到"])
 
     holidayList = lunar[1].split(" ")
     lunarDate = lunar[0]

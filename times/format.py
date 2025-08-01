@@ -84,6 +84,158 @@ def convert_to_unix(dt: datetime) -> float:
         return time.mktime(dt.timetuple()) + dt.microsecond / 1e6
 
 
+def _handle_datetime_input(time_var: datetime) -> float:
+    """处理 datetime 对象输入"""
+    log.debug("输入为 datetime 对象")
+    return convert_to_unix(time_var)
+
+
+def _handle_numeric_input(time_var: Union[int, float]) -> float:
+    """处理数字类型输入（int 或 float）"""
+    candidate = float(time_var)
+    now_time = time.time()
+    # 如果数字远大于当前时间，则可能为毫秒级时间戳
+    if candidate > now_time * 10:
+        candidate_sec = candidate / 1000.0
+        log.debug("检测到数字为毫秒级时间戳，转换为秒制")
+        return candidate_sec
+    else:
+        return candidate
+
+
+def _handle_tuple_input(time_var: tuple) -> float:
+    """处理元组类型输入"""
+    try:
+        ts = time.mktime(time_var)
+        log.debug("从元组转换为时间戳")
+        return float(ts)
+    except Exception as e:
+        log.warning("无法将元组转换为时间戳: " + str(e))
+        return -1
+
+
+def _extract_epoch_timestamp(text: str) -> Union[float, None]:
+    """从文本中提取 Epoch 格式的时间戳"""
+    epoch_match = re.search(r"(?i)epoch.*?(\d+)", text)
+    if epoch_match:
+        num = epoch_match.group(1)
+        try:
+            candidate = float(num)
+            now_time = time.time()
+            if candidate > now_time * 10:
+                candidate = candidate / 1000.0
+            log.debug("从 Epoch 格式中解析到时间戳")
+            return candidate
+        except Exception as e:
+            log.warning("从 Epoch 格式解析失败: " + str(e))
+    return None
+
+
+def _handle_pure_numeric_string(text: str) -> Union[float, None]:
+    """处理纯数字字符串（可能为 Unix 时间戳）"""
+    numeric_match = re.fullmatch(r"\d+(\.\d+)?", text)
+    if numeric_match:
+        try:
+            candidate = float(text)
+            now_time = time.time()
+            if candidate > now_time * 10:
+                candidate_sec = candidate / 1000.0
+                log.debug("检测到纯数字为毫秒级时间戳，转换为秒制")
+                return candidate_sec
+            else:
+                log.debug("检测到纯数字为秒级时间戳")
+                return candidate
+        except Exception as e:
+            log.warning("纯数字转换为时间戳失败: " + str(e))
+    return None
+
+
+def _handle_parser_libraries(text: str) -> Union[datetime, None]:
+    """使用第三方库解析时间字符串"""
+    import dateparser
+    from dateutil import parser as dtparser
+
+    # 尝试使用 dateparser 解析（支持中文及自然语言描述）
+    dt = None
+    if dateparser is not None:
+        try:
+            dt = dateparser.parse(text, settings={"TIMEZONE": "Asia/Shanghai", "RETURN_AS_TIMEZONE_AWARE": False})
+        except Exception as e:
+            log.warning("dateparser 解析异常: " + str(e))
+    else:
+        log.warning("未安装 dateparser 库，跳过该解析步骤")
+
+    # 如果 dateparser 未解析成功，尝试 dateutil.parser
+    if not dt and dtparser is not None:
+        try:
+            dt = dtparser.parse(text, fuzzy=True)
+        except Exception as e:
+            log.warning("dateutil.parser 解析异常: " + str(e))
+            return None
+
+    return dt
+
+
+def _adjust_default_time_if_needed(dt: datetime, original_text: str) -> datetime:
+    """如果解析结果仅包含日期且原字符串中不包含明显的时间信息，则默认设为中午 12 点"""
+    if dt.hour == 0 and dt.minute == 0 and dt.second == 0:
+        if not re.search(r"[\d:时分]", original_text):
+            dt = dt.replace(hour=12, minute=0, second=0)
+            log.debug("仅解析到日期，默认设置为中午 12 点")
+    return dt
+
+
+def _handle_string_input(time_var: str, fmt: str = "") -> float:
+    """处理字符串类型输入"""
+    text = time_var.strip()
+    if not text:
+        log.warning("空字符串无法解析")
+        return -1
+
+    if fmt:
+        result = _str2unix(time_var, fmt)
+        if result is None:
+            return -1
+        return result
+
+    # 去除可能的前导 '@'
+    if text.startswith("@"):
+        text = text[1:].strip()
+
+    # 处理 "Epoch + 1696502880 seconds" 这类格式
+    epoch_result = _extract_epoch_timestamp(text)
+    if epoch_result is not None:
+        return epoch_result
+
+    # 优先尝试正则匹配数字日期格式
+    dt = parse_by_regex(text)
+    if dt:
+        return convert_to_unix(dt)
+
+    # 如果字符串为纯数字（可能为 Unix 时间戳）
+    numeric_result = _handle_pure_numeric_string(text)
+    if numeric_result is not None:
+        return numeric_result
+
+    # 尝试使用特殊格式解析（覆盖 Day xxx, YYYY-Www-d, 去年的今天, 一周前 等）
+    special_dt = parse_special_format(text)
+    if special_dt is not None:
+        log.info("通过自定义规则解析到日期: " + special_dt.strftime("%Y-%m-%d %H:%M:%S"))
+        return convert_to_unix(special_dt)
+
+    # 尝试使用第三方库解析
+    dt = _handle_parser_libraries(text)
+    if not dt:
+        log.warning("无法解析时间字符串: " + text)
+        return -1
+
+    # 调整默认时间
+    dt = _adjust_default_time_if_needed(dt, text)
+
+    log.debug("通过解析器解析到日期: " + dt.strftime("%Y-%m-%d %H:%M:%S"))
+    return convert_to_unix(dt)
+
+
 def any2unix(timeVar: Union[str, int, float, tuple, datetime], fmt: str = "") -> float:
     """
     将任意格式的时间变量转换为 Unix 时间戳（秒）。
@@ -91,125 +243,21 @@ def any2unix(timeVar: Union[str, int, float, tuple, datetime], fmt: str = "") ->
     对于字符串，优先通过正则匹配常见数字格式，再采用 dateparser 或 dateutil.parser 解析。
     返回系统当地时区（通常为 UTC+8）的 Unix 时间戳（浮点数，单位秒）。
     """
-    import dateparser
-    from dateutil import parser as dtParser
-
     # 1. 如果是 datetime 对象，直接转换
     if isinstance(timeVar, datetime):
-        dt = timeVar
-        log.debug("输入为 datetime 对象")
-        return convert_to_unix(dt)
+        return _handle_datetime_input(timeVar)
 
     # 2. 数字类型：int 或 float
     if isinstance(timeVar, (int, float)):
-        candidate = float(timeVar)
-        nowTime = time.time()
-        # 如果数字远大于当前时间，则可能为毫秒级时间戳
-        if candidate > nowTime * 10:
-            candidateSec = candidate / 1000.0
-            log.debug("检测到数字为毫秒级时间戳，转换为秒制")
-            return candidateSec
-        else:
-            return candidate
+        return _handle_numeric_input(timeVar)
 
     # 3. 元组类型（例如 time.localtime() 返回的元组）
     if isinstance(timeVar, tuple):
-        try:
-            ts = time.mktime(timeVar)
-            log.debug("从元组转换为时间戳")
-            return float(ts)
-        except Exception as e:
-            log.warning("无法将元组转换为时间戳: " + str(e))
-            return -1
+        return _handle_tuple_input(timeVar)
 
     # 4. 字符串类型
     if isinstance(timeVar, str):
-        text = timeVar.strip()
-        if not text:
-            log.warning("空字符串无法解析")
-            return -1
-
-        if fmt:
-            result = _str2unix(timeVar, fmt)
-            if result is None:
-                return -1
-            return result
-
-        # 去除可能的前导 '@'
-        if text.startswith("@"):
-            text = text[1:].strip()
-
-        # 处理 "Epoch + 1696502880 seconds" 这类格式
-        epochMatch = re.search(r"(?i)epoch.*?(\d+)", text)
-        if epochMatch:
-            num = epochMatch.group(1)
-            try:
-                candidate = float(num)
-                nowTime = time.time()
-                if candidate > nowTime * 10:
-                    candidate = candidate / 1000.0
-                log.debug("从 Epoch 格式中解析到时间戳")
-                return candidate
-            except Exception as e:
-                log.warning("从 Epoch 格式解析失败: " + str(e))
-
-        # 优先尝试正则匹配数字日期格式
-        dt = parse_by_regex(text)
-        if dt:
-            return convert_to_unix(dt)
-
-        # 如果字符串为纯数字（可能为 Unix 时间戳）
-        numericMatch = re.fullmatch(r"\d+(\.\d+)?", text)
-        if numericMatch:
-            try:
-                candidate = float(text)
-                nowTime = time.time()
-                if candidate > nowTime * 10:
-                    candidateSec = candidate / 1000.0
-                    log.debug("检测到纯数字为毫秒级时间戳，转换为秒制")
-                    return candidateSec
-                else:
-                    log.debug("检测到纯数字为秒级时间戳")
-                    return candidate
-            except Exception as e:
-                log.warning("纯数字转换为时间戳失败: " + str(e))
-
-        # 尝试使用特殊格式解析（覆盖 Day xxx, YYYY-Www-d, 去年的今天, 一周前 等）
-        specialDt = parse_special_format(text)
-        if specialDt is not None:
-            log.info("通过自定义规则解析到日期: " + specialDt.strftime("%Y-%m-%d %H:%M:%S"))
-            return convert_to_unix(specialDt)
-
-        # 尝试使用 dateparser 解析（支持中文及自然语言描述）
-        dt = None
-        if dateparser is not None:
-            try:
-                dt = dateparser.parse(text, settings={"TIMEZONE": "Asia/Shanghai", "RETURN_AS_TIMEZONE_AWARE": False})
-            except Exception as e:
-                log.warning("dateparser 解析异常: " + str(e))
-        else:
-            log.warning("未安装 dateparser 库，跳过该解析步骤")
-
-        # 如果 dateparser 未解析成功，尝试 dateutil.parser
-        if not dt and dtParser is not None:
-            try:
-                dt = dtParser.parse(text, fuzzy=True)
-            except Exception as e:
-                log.warning("dateutil.parser 解析异常: " + str(e))
-                return -1
-
-        if not dt:
-            log.warning("无法解析时间字符串: " + text)
-            return -1
-
-        # 如果解析结果仅包含日期（时分秒均为 0），且原字符串中不包含明显的时间信息，则默认设为中午 12 点
-        if dt.hour == 0 and dt.minute == 0 and dt.second == 0:
-            if not re.search(r"[\d:时分]", text):
-                dt = dt.replace(hour=12, minute=0, second=0)
-                log.debug("仅解析到日期，默认设置为中午 12 点")
-
-        log.debug("通过解析器解析到日期: " + dt.strftime("%Y-%m-%d %H:%M:%S"))
-        return convert_to_unix(dt)
+        return _handle_string_input(timeVar, fmt)
 
     log.warning("无法识别的时间类型: " + str(type(timeVar)))
     return -1
@@ -245,7 +293,7 @@ def unix2str(unixTime: float = 0.0, fmt: str = "%Y%m%d%H%M%S") -> str:
         return "0"
 
 
-def unix2taskId(rtime=0.0, offset=0.0):
+def unix2taskid(rtime=0.0, offset=0.0):
     """
     按半天量化为 11 点或 23 点（从10~22点都属于11am，22~10属于23pm）
     offset 以天为单位
@@ -276,7 +324,7 @@ def any2taskid(anytime):
     任意格式智能识别然后转 taskId
     替换原 any2taskid、str2taskId
     """
-    return unix2taskId(any2unix(anytime))
+    return unix2taskid(any2unix(anytime))
 
 
 def is_taskid(f):
@@ -316,11 +364,11 @@ week_eng2chs = {
 }
 
 
-def taskId2fmt(tm):
+def taskid2fmt(tm):
     return tm[:4] + "." + tm[4:6] + "." + tm[6:8] + "-" + tm[8:]
 
 
-def taskId2chs(date, fmt="%Y年%m月%d日（%a）"):
+def taskid2chs(date, fmt="%Y年%m月%d日（%a）"):
     s1 = (
         time.strftime(fmt.encode("unicode_escape").decode("utf8"), any2tuple(date))
         .encode("utf-8")
@@ -363,6 +411,86 @@ def any2tuple(stime):
     return time.localtime(any2unix(stime))
 
 
+def _parse_ymdhms_format(num_str: str, micro_seconds: Union[str, None] = None) -> Union[datetime, None]:
+    """解析 YYYYMMDDHHMMSS 格式（14位数字）"""
+    try:
+        year = int(num_str[0:4])
+        month = int(num_str[4:6])
+        day = int(num_str[6:8])
+        hour = int(num_str[8:10])
+        minute = int(num_str[10:12])
+        second = int(num_str[12:14])
+        micro = 0
+        if micro_seconds:
+            # 小数部分转换为微秒
+            frac = float(micro_seconds)
+            micro = round(frac * 1e6)
+        return datetime(year, month, day, hour, minute, second, micro)
+    except Exception as e:
+        log.debug("解析 YYYYMMDDHHMMSS 格式失败: " + str(e))
+        return None
+
+
+def _parse_ymdhm_format(num_str: str) -> Union[datetime, None]:
+    """解析 YYYYMMDDHHMM 格式（12位数字）"""
+    try:
+        year = int(num_str[0:4])
+        month = int(num_str[4:6])
+        day = int(num_str[6:8])
+        hour = int(num_str[8:10])
+        minute = int(num_str[10:12])
+        return datetime(year, month, day, hour, minute, 0)
+    except Exception as e:
+        log.debug("解析 YYYYMMDDHHMM 格式失败: " + str(e))
+        return None
+
+
+def _parse_ymdh_format(num_str: str) -> Union[datetime, None]:
+    """解析 YYYYMMDDHH 格式（10位数字）"""
+    try:
+        year = int(num_str[0:4])
+        month = int(num_str[4:6])
+        day = int(num_str[6:8])
+        hour = int(num_str[8:10])
+        # 判断年份等是否合理
+        if 1900 <= year <= 2100 and 1 <= month <= 12 and 1 <= day <= 31 and hour < 24:
+            return datetime(year, month, day, hour, 0, 0)
+        # 若不合理，则可能应按 Unix 时间戳处理
+    except Exception as e:
+        log.debug("解析 YYYYMMDDHH 格式失败: " + str(e))
+    return None
+
+
+def _parse_ymd_format(num_str: str) -> Union[datetime, None]:
+    """解析 YYYYMMDD 格式（8位数字）"""
+    try:
+        year = int(num_str[0:4])
+        month = int(num_str[4:6])
+        day = int(num_str[6:8])
+        # 默认时间设为中午 12 点
+        return datetime(year, month, day, 12, 0, 0)
+    except Exception as e:
+        log.debug("解析 YYYYMMDD 格式失败: " + str(e))
+        return None
+
+
+def _parse_yymmdd_format(num_str: str) -> Union[datetime, None]:
+    """解析 YYMMDD 格式（6位数字）"""
+    try:
+        year = int(num_str[0:2])
+        # 若年份小于 70，则认为是 2000 年，否则 1900 年
+        if year < 70:
+            year += 2000
+        else:
+            year += 1900
+        month = int(num_str[2:4])
+        day = int(num_str[4:6])
+        return datetime(year, month, day, 12, 0, 0)
+    except Exception as e:
+        log.debug("解析 YYMMDD 格式失败: " + str(e))
+        return None
+
+
 def parse_by_regex(text):
     """
     利用正则表达式匹配常见的纯数字日期格式：
@@ -380,59 +508,115 @@ def parse_by_regex(text):
         (r"(\d{8})", "ymd"),
         (r"(\d{6})", "yymmdd"),
     ]
+
     for pattern, fmt in patterns:
         m = re.search(pattern, text)
         if m:
-            numStr = m.group(1)
+            num_str = m.group(1)
             try:
                 if fmt == "ymdhms":
-                    year = int(numStr[0:4])
-                    month = int(numStr[4:6])
-                    day = int(numStr[6:8])
-                    hour = int(numStr[8:10])
-                    minute = int(numStr[10:12])
-                    second = int(numStr[12:14])
-                    micro = 0
-                    if m.group(2):
-                        # 小数部分转换为微秒
-                        frac = float(m.group(2))
-                        micro = int(round(frac * 1e6))
-                    return datetime(year, month, day, hour, minute, second, micro)
+                    return _parse_ymdhms_format(num_str, m.group(2))
                 elif fmt == "ymdhm":
-                    year = int(numStr[0:4])
-                    month = int(numStr[4:6])
-                    day = int(numStr[6:8])
-                    hour = int(numStr[8:10])
-                    minute = int(numStr[10:12])
-                    return datetime(year, month, day, hour, minute, 0)
+                    return _parse_ymdhm_format(num_str)
                 elif fmt == "ymdh":
-                    year = int(numStr[0:4])
-                    month = int(numStr[4:6])
-                    day = int(numStr[6:8])
-                    hour = int(numStr[8:10])
-                    # 判断年份等是否合理
-                    if 1900 <= year <= 2100 and 1 <= month <= 12 and 1 <= day <= 31 and hour < 24:
-                        return datetime(year, month, day, hour, 0, 0)
-                    # 若不合理，则可能应按 Unix 时间戳处理
+                    return _parse_ymdh_format(num_str)
                 elif fmt == "ymd":
-                    year = int(numStr[0:4])
-                    month = int(numStr[4:6])
-                    day = int(numStr[6:8])
-                    # 默认时间设为中午 12 点
-                    return datetime(year, month, day, 12, 0, 0)
+                    return _parse_ymd_format(num_str)
                 elif fmt == "yymmdd":
-                    year = int(numStr[0:2])
-                    # 若年份小于 70，则认为是 2000 年，否则 1900 年
-                    if year < 70:
-                        year += 2000
-                    else:
-                        year += 1900
-                    month = int(numStr[2:4])
-                    day = int(numStr[4:6])
-                    return datetime(year, month, day, 12, 0, 0)
-            except Exception:  # as e:
-                # log.warning("正则解析日期失败: " + str(e))
+                    return _parse_yymmdd_format(num_str)
+            except Exception as e:
+                log.debug("正则解析日期失败: " + str(e))
                 continue
+    return None
+
+
+def _parse_day_of_year_format(text: str) -> Union[datetime, None]:
+    """解析 "Day 278 of 2023 14:48" 格式"""
+    m = re.search(r"Day\s+(\d+)\s+of\s+(\d{4})(.*)", text, re.IGNORECASE)
+    if m:
+        try:
+            day_of_year = int(m.group(1))
+            year = int(m.group(2))
+            time_part = m.group(3).strip()
+            # 根据年初日期加上 dayOfYear-1 天
+            base_date = datetime(year, 1, 1) + timedelta(days=day_of_year - 1)
+            # 尝试解析时间部分，例如 "14:48" 或 "14時48分"
+            if time_part:
+                m_time = re.search(r"(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?", time_part)
+                if m_time:
+                    hour = int(m_time.group(1))
+                    minute = int(m_time.group(2))
+                    second = int(m_time.group(3)) if m_time.group(3) else 0
+                    base_date = base_date.replace(hour=hour, minute=minute, second=second)
+                else:
+                    m_time2 = re.search(r"(\d{1,2})[時:：](\d{1,2})", time_part)
+                    if m_time2:
+                        hour = int(m_time2.group(1))
+                        minute = int(m_time2.group(2))
+                        base_date = base_date.replace(hour=hour, minute=minute)
+            else:
+                base_date = base_date.replace(hour=12, minute=0, second=0)
+            return base_date
+        except Exception as e:
+            log.warning("解析 'Day xxx of yyyy' 格式失败: " + str(e))
+    return None
+
+
+def _parse_iso_week_format(text: str) -> Union[datetime, None]:
+    """解析 "2023-W40-5" 格式"""
+    m = re.search(r"(\d{4})-W(\d{1,2})-(\d)", text)
+    if m:
+        try:
+            year = int(m.group(1))
+            week = int(m.group(2))
+            weekday = int(m.group(3))
+            dt_date = date.fromisocalendar(year, week, weekday)
+            dt_obj = datetime.combine(dt_date, datetime_time(12, 0, 0))
+            # 检查是否附带时间信息
+            remaining = text[m.end() :].strip()
+            if remaining:
+                m_time = re.search(r"(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?", remaining)
+                if m_time:
+                    hour = int(m_time.group(1))
+                    minute = int(m_time.group(2))
+                    second = int(m_time.group(3)) if m_time.group(3) else 0
+                    dt_obj = dt_obj.replace(hour=hour, minute=minute, second=second)
+                else:
+                    m_time2 = re.search(r"(\d{1,2})[時:：](\d{1,2})", remaining)
+                    if m_time2:
+                        hour = int(m_time2.group(1))
+                        minute = int(m_time2.group(2))
+                        dt_obj = dt_obj.replace(hour=hour, minute=minute)
+            return dt_obj
+        except Exception as e:
+            log.warning("解析 'YYYY-Www-d' 格式失败: " + str(e))
+    return None
+
+
+def _parse_relative_time_format(text: str) -> Union[datetime, None]:
+    """解析相对时间格式，如"去年的今天"、"一周前"等"""
+    # 处理 "去年的今天"
+    if "去年的今天" in text:
+        try:
+            now_dt = datetime.now()
+            try:
+                dt_obj = now_dt.replace(year=now_dt.year - 1)
+            except ValueError:
+                # 处理2月29日等问题，简单减去365天
+                dt_obj = now_dt - timedelta(days=365)
+            return dt_obj
+        except Exception as e:
+            log.warning("解析 '去年的今天' 失败: " + str(e))
+
+    # 处理 "一周前"
+    if "一周前" in text:
+        try:
+            now_dt = datetime.now()
+            dt_obj = now_dt - timedelta(weeks=1)
+            return dt_obj
+        except Exception as e:
+            log.warning("解析 '一周前' 失败: " + str(e))
+
     return None
 
 
@@ -446,83 +630,19 @@ def parse_special_format(text):
     返回 datetime 对象（若能成功解析），否则返回 None。
     """
     # 处理 "Day 278 of 2023 14:48" 格式（忽略大小写）
-    m = re.search(r"Day\s+(\d+)\s+of\s+(\d{4})(.*)", text, re.IGNORECASE)
-    if m:
-        try:
-            dayOfYear = int(m.group(1))
-            year = int(m.group(2))
-            timePart = m.group(3).strip()
-            # 根据年初日期加上 dayOfYear-1 天
-            baseDate = datetime(year, 1, 1) + timedelta(days=dayOfYear - 1)
-            # 尝试解析时间部分，例如 "14:48" 或 "14時48分"
-            if timePart:
-                mTime = re.search(r"(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?", timePart)
-                if mTime:
-                    hour = int(mTime.group(1))
-                    minute = int(mTime.group(2))
-                    second = int(mTime.group(3)) if mTime.group(3) else 0
-                    baseDate = baseDate.replace(hour=hour, minute=minute, second=second)
-                else:
-                    mTime2 = re.search(r"(\d{1,2})[時:：](\d{1,2})", timePart)
-                    if mTime2:
-                        hour = int(mTime2.group(1))
-                        minute = int(mTime2.group(2))
-                        baseDate = baseDate.replace(hour=hour, minute=minute)
-            else:
-                baseDate = baseDate.replace(hour=12, minute=0, second=0)
-            return baseDate
-        except Exception as e:
-            log.warning("解析 'Day xxx of yyyy' 格式失败: " + str(e))
+    day_of_year_result = _parse_day_of_year_format(text)
+    if day_of_year_result:
+        return day_of_year_result
 
     # 处理 "2023-W40-5" 格式
-    m = re.search(r"(\d{4})-W(\d{1,2})-(\d)", text)
-    if m:
-        try:
-            year = int(m.group(1))
-            week = int(m.group(2))
-            weekday = int(m.group(3))
-            dtDate = date.fromisocalendar(year, week, weekday)
-            dtObj = datetime.combine(dtDate, datetime_time(12, 0, 0))
-            # 检查是否附带时间信息
-            remaining = text[m.end() :].strip()
-            if remaining:
-                mTime = re.search(r"(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?", remaining)
-                if mTime:
-                    hour = int(mTime.group(1))
-                    minute = int(mTime.group(2))
-                    second = int(mTime.group(3)) if mTime.group(3) else 0
-                    dtObj = dtObj.replace(hour=hour, minute=minute, second=second)
-                else:
-                    mTime2 = re.search(r"(\d{1,2})[時:：](\d{1,2})", remaining)
-                    if mTime2:
-                        hour = int(mTime2.group(1))
-                        minute = int(mTime2.group(2))
-                        dtObj = dtObj.replace(hour=hour, minute=minute)
-            return dtObj
-        except Exception as e:
-            log.warning("解析 'YYYY-Www-d' 格式失败: " + str(e))
+    iso_week_result = _parse_iso_week_format(text)
+    if iso_week_result:
+        return iso_week_result
 
-    # 处理 "去年的今天"
-    if "去年的今天" in text:
-        try:
-            nowDt = datetime.now()
-            try:
-                dtObj = nowDt.replace(year=nowDt.year - 1)
-            except ValueError:
-                # 处理2月29日等问题，简单减去365天
-                dtObj = nowDt - timedelta(days=365)
-            return dtObj
-        except Exception as e:
-            log.warning("解析 '去年的今天' 失败: " + str(e))
-
-    # 处理 "一周前"
-    if "一周前" in text:
-        try:
-            nowDt = datetime.now()
-            dtObj = nowDt - timedelta(weeks=1)
-            return dtObj
-        except Exception as e:
-            log.warning("解析 '一周前' 失败: " + str(e))
+    # 处理相对时间格式
+    relative_time_result = _parse_relative_time_format(text)
+    if relative_time_result:
+        return relative_time_result
 
     # 未匹配到特殊格式，返回 None
     return None
