@@ -4,7 +4,7 @@
 """
 import time
 from datetime import datetime, timedelta
-from typing import List
+from typing import List, Union
 
 from lebase.times.format import any2taskid, any2unix, unix2str, unix2taskid
 
@@ -115,6 +115,58 @@ def nearest_saturday() -> str:
     return nearest.strftime("%Y%m%d")
 
 
+def nearest_yyyymm(unixtime: Union[float, None] = None, offset: int = 0) -> str:
+    """
+    根据时间返回 yyyymm 格式的字符串
+
+    :param unixtime: Unix 时间戳，不传则取当前时间
+    :param offset: 相对前后偏移几个月，正数为向后偏移，负数为向前偏移
+    :return: yyyymm 格式的字符串
+
+    规则：每月 15 号前返回月初，15 号后返回下个月月初
+    """
+    if not unixtime:
+        currentTime = time.time()
+    else:
+        currentTime = unixtime
+
+    # 转换为 datetime 对象
+    currentDate = datetime.fromtimestamp(currentTime)
+
+    # 判断是 15 号前还是后
+    if currentDate.day < 15:
+        # 15 号前，返回当月
+        targetDate = currentDate.replace(day=1)
+    # 15 号后，返回下个月
+    elif currentDate.month == 12:
+        targetDate = currentDate.replace(year=currentDate.year + 1, month=1, day=1)
+    else:
+        targetDate = currentDate.replace(month=currentDate.month + 1, day=1)
+
+    # 应用偏移量
+    if offset != 0:
+        yearOffset = offset // 12
+        monthOffset = offset % 12
+
+        newYear = targetDate.year + yearOffset
+        newMonth = targetDate.month + monthOffset
+
+        # 处理月份溢出
+        if newMonth > 12:
+            newYear += 1
+            newMonth -= 12
+        elif newMonth < 1:
+            newYear -= 1
+            newMonth += 12
+
+        targetDate = targetDate.replace(year=newYear, month=newMonth)
+
+    # 返回 yyyymm 格式
+    return targetDate.strftime("%Y%m")
+
+
 if __name__ == "__main__":
     print(nearest_saturday())
+    print(nearest_yyyymm())  # 测试当前时间
+    print(nearest_yyyymm(offset=-1))  # 测试偏移一个月
     pass

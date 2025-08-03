@@ -26,6 +26,36 @@ def test_unix2chs():
     assert isinstance(result, str)
 
 
+def test_nearest_yyyymm():
+    """测试 nearest_yyyymm 函数"""
+    from lebase.times.datecalc import nearest_yyyymm
+    
+    # 测试当前时间
+    result = nearest_yyyymm()
+    assert isinstance(result, str)
+    assert len(result) == 6
+    assert result.isdigit()
+    
+    # 测试指定时间（2024年1月10日，15号前，应该返回202401）
+    test_time = 1704844800  # 2024-01-10 00:00:00
+    result = nearest_yyyymm(test_time)
+    assert result == "202401"
+    
+    # 测试指定时间（2024年1月20日，15号后，应该返回202402）
+    test_time = 1705708800  # 2024-01-20 00:00:00
+    result = nearest_yyyymm(test_time)
+    assert result == "202402"
+    
+    # 测试偏移量
+    test_time = 1704844800  # 2024-01-10 00:00:00
+    result = nearest_yyyymm(test_time, offset=1)
+    assert result == "202402"
+    
+    # 测试负偏移量
+    result = nearest_yyyymm(test_time, offset=-1)
+    assert result == "202312"
+
+
 if __name__ == "__main__":
     import pytest
 
