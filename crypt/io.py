@@ -1,10 +1,9 @@
 import base64
 import os
 
-# 使用 cryptography 库进行加解密
-from cryptography.fernet import Fernet
-from cryptography.hazmat.backends import default_backend
+# 使用 cryptography 库进行加解密（PBKDF2-SHA256 + AES-256-GCM）
 from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 from lelog.logs import log  # 假定已提供 log.info 与 log.warn 函数
@@ -14,48 +13,58 @@ from levar.var import lev
 # 1. 配置文件格式与密码加解密工具函数
 ########################################
 
+_PBKDF2_ITERATIONS = 600000
+
 
 def derive_key(masterPassword, salt):
     """
-    根据主密码和 salt 派生密钥，返回 32 字节的 Fernet 密钥
+    根据主密码和 salt 派生 32 字节密钥（PBKDF2-HMAC-SHA256，600k 次迭代）
     """
-    kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=100000, backend=default_backend())
-    key = base64.urlsafe_b64encode(kdf.derive(masterPassword.encode()))
-    return key
+    kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=_PBKDF2_ITERATIONS)
+    return kdf.derive(masterPassword.encode())
 
 
 def encrypt_password(masterPassword, plainPassword):
     """
-    加密密码工具函数
+    加密密码工具函数（AES-256-GCM）
     参数：
         masterPassword: 主密码，用于派生加密密钥
         plainPassword: 明文密码
-    返回值：加密后的密码字符串，同时打印加密结果
-    格式为：base64(salt) + ":" + 密文
+    返回值：加密后的密码字符串
+    格式为：base64(salt) + ":" + base64(iv) + ":" + base64(ciphertext+tag)
     """
-    salt = os.urandom(16)  # 生成随机 salt
+    salt = os.urandom(16)
+    iv = os.urandom(12)  # GCM 推荐 96-bit IV
     key = derive_key(masterPassword, salt)
-    fernet = Fernet(key)
-    encrypted = fernet.encrypt(plainPassword.encode())
-    encryptedStr = base64.urlsafe_b64encode(salt).decode() + ":" + encrypted.decode()
+    aesgcm = AESGCM(key)
+    ciphertext = aesgcm.encrypt(iv, plainPassword.encode(), None)  # 含 16 字节 auth tag
+    encryptedStr = (
+        base64.urlsafe_b64encode(salt).decode()
+        + ":"
+        + base64.urlsafe_b64encode(iv).decode()
+        + ":"
+        + base64.urlsafe_b64encode(ciphertext).decode()
+    )
     log.info("加密后的密码: " + encryptedStr)
     return encryptedStr
 
 
 def decrypt_password(masterPassword, encryptedStr):
     """
-    解密密码工具函数
+    解密密码工具函数（AES-256-GCM）
     参数：
         masterPassword: 主密码
-        encryptedStr: 加密后的密码字符串
+        encryptedStr: 加密后的密码字符串（salt:iv:ciphertext 三段 base64）
     返回值：解密后的明文密码；若解密失败则返回 None，并打印 warn 信息
     """
     try:
-        saltB64, encryptedData = encryptedStr.split(":")
+        saltB64, ivB64, ciphertextB64 = encryptedStr.split(":")
         salt = base64.urlsafe_b64decode(saltB64)
+        iv = base64.urlsafe_b64decode(ivB64)
+        ciphertext = base64.urlsafe_b64decode(ciphertextB64)
         key = derive_key(masterPassword, salt)
-        fernet = Fernet(key)
-        decrypted = fernet.decrypt(encryptedData.encode())
+        aesgcm = AESGCM(key)
+        decrypted = aesgcm.decrypt(iv, ciphertext, None)
         return decrypted.decode()
     except Exception as e:
         log.warning("解密密码失败: " + str(e))
