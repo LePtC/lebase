@@ -5,10 +5,12 @@ ATSIHID — 128-bit sortable, verifiable, obfuscated unique ID
 Layout (128 bits, big-endian):
 
     App_16 | Time_48 | Seq_16 | Obfuscated_48
-                                  └─ (IP_32 | HMAC_16) XOR obs
+                                  └─ (IAM_32 | HMAC_16) XOR obs
 
-    obs = HMAC-SHA256(key, Time_48)[:6]          — 48-bit obfuscation mask
-    HMAC_16 = HMAC-SHA256(key, App|Time|Seq|IP)[:2]  — 16-bit signature
+    IAM_32:  高 2 位固定 0，低 30 位为 IAM 标识符的 5 个 base64 字符编码。
+             若高 2 位非零，说明该字段存储的是传统 IPv4 地址而非 IAM。
+    obs = HMAC-SHA256(key, Time_48)[:6]               — 48-bit obfuscation mask
+    HMAC_16 = HMAC-SHA256(key, App|Time|Seq|IAM)[:2]  — 16-bit signature
 
 Epoch: 2026-04-01 00:00:00 UTC  (ms)
 
@@ -22,10 +24,12 @@ from __future__ import annotations
 import hashlib
 import hmac
 import os
+import re
 import secrets
 import sys
 import threading
 import time
+import uuid as _uuid_mod
 from typing import Optional
 
 # ── Constants ────────────────────────────────────────────────────────
@@ -70,6 +74,104 @@ def _load_ip() -> int:
     return (int(parts[0]) << 24) | (int(parts[1]) << 16) | (int(parts[2]) << 8) | int(parts[3])
 
 
+# ── IAM helpers ──────────────────────────────────────────────────
+
+_IAM_RESERVED = {"LO", "UNK", "VM"}
+_IAM_PATTERN = re.compile(r"^[A-Z][A-Z0-9]*$")
+_IAM_CHARS = 5  # IAM 在 ID 中占 5 个 base64 字符 = 30 bits
+
+
+def validate_iam(s: str) -> bool:
+    """校验 IAM 标识符是否合法。
+
+    规则：纯大写字母+数字，必须以大写字母开头，不能为保留词 (LO/UNK/VM)。
+    """
+    if not s or s in _IAM_RESERVED:
+        return False
+    return bool(_IAM_PATTERN.match(s))
+
+
+def _get_mac_32() -> int:
+    """获取本机 MAC 地址的低 32 bits。"""
+    return _uuid_mod.getnode() & 0xFFFFFFFF
+
+
+def _mac32_to_iam(mac32: int) -> str:
+    """将 32-bit MAC 值编码为 6 个自定义 base64 字符（可直接写入 IAM.txt）。"""
+    chars: list[str] = []
+    n = mac32
+    for _ in range(6):
+        chars.append(_B64_ALPHABET[n & 0x3F])
+        n >>= 6
+    return "".join(reversed(chars))
+
+
+def iam_to_32bit(iam: str) -> int:
+    """IAM 字符串 → 32-bit 整数（高 2 位固定 0，低 30 位为 5 个 base64 字符）。
+
+    不足 5 字符左侧补 '$'(值 0)，超过 5 字符截断前 5 个。
+    """
+    padded = iam[:_IAM_CHARS].rjust(_IAM_CHARS, "$")
+    n = 0
+    for ch in padded:
+        if ch not in _B64_MAP:
+            raise ValueError(f"IAM 包含非法 base64 字符: {ch!r}")
+        n = n * 64 + _B64_MAP[ch]
+    return n  # 最大 30 bits，高 2 位自然为 0
+
+
+def decode_iam_32(val: int) -> str:
+    """32-bit 整数 → IAM 字符串（去掉左侧 '$' 补位）。"""
+    val &= 0x3FFFFFFF  # 取低 30 bits
+    chars: list[str] = []
+    for _ in range(_IAM_CHARS):
+        chars.append(_B64_ALPHABET[val & 0x3F])
+        val >>= 6
+    return "".join(reversed(chars)).lstrip("$")
+
+
+def _iam_path() -> str:
+    """IAM.txt 的平台路径。"""
+    if sys.platform == "win32":
+        return os.path.join(os.environ.get("LOCALAPPDATA", ""), "lefac", "IAM.txt")
+    return os.path.expanduser("~/.local/etc/lefac/IAM.txt")
+
+
+def _is_iam_usable(s: str) -> bool:
+    """判断 IAM.txt 中的值是否可用（合法的手动 IAM 或 MAC 回退值均可）。"""
+    if not s or s == "UNK":
+        return False
+    # 手动设置的合法 IAM
+    if validate_iam(s):
+        return True
+    # MAC 回退产生的值：所有字符都在 base64 字母表中即可
+    return all(ch in _B64_MAP for ch in s)
+
+
+def _load_iam() -> int:
+    """读取 IAM.txt 并返回 32-bit 编码值。
+
+    若 IAM 缺失、为 UNK 或不可用，则用 MAC 后 32 位生成 IAM 并覆写 IAM.txt。
+    """
+    path = _iam_path()
+    iam = ""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            iam = f.read().strip()
+    except FileNotFoundError:
+        pass
+
+    if not _is_iam_usable(iam):
+        # MAC 回退
+        mac32 = _get_mac_32()
+        iam = _mac32_to_iam(mac32)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(iam)
+
+    return iam_to_32bit(iam)
+
+
 def _hmac_sha256(key: bytes, data: bytes) -> bytes:
     return hmac.new(key, data, hashlib.sha256).digest()
 
@@ -102,7 +204,7 @@ _seq_counter = _SeqCounter()
 
 def generate(app_id: int, *, sequential: bool = False,
              _key: Optional[bytes] = None,
-             _ip: Optional[int] = None,
+             _iam32: Optional[int] = None,
              _time_ms: Optional[int] = None) -> bytes:
     """
     生成一个 128-bit (16 bytes) ATSIHID。
@@ -110,7 +212,7 @@ def generate(app_id: int, *, sequential: bool = False,
     Args:
         app_id:     16-bit 应用标识 (0 ~ 65535)
         sequential: True 使用单调递增序列号，False 随机生成 (默认)
-        _key/_ip/_time_ms: 测试用覆盖参数
+        _key/_iam32/_time_ms: 测试用覆盖参数
 
     Returns:
         16 bytes, big-endian
@@ -119,7 +221,7 @@ def generate(app_id: int, *, sequential: bool = False,
         raise ValueError(f"app_id 超出范围 [0, 65535]: {app_id}")
 
     key = _key if _key is not None else _load_key()
-    ip32 = _ip if _ip is not None else _load_ip()
+    ip32 = _iam32 if _iam32 is not None else _load_iam()
     t48 = _time_ms if _time_ms is not None else _now_ms()
 
     if t48 < 0 or t48 > _TIME48_MAX:
@@ -158,14 +260,19 @@ def decode(uid: bytes, *, _key: Optional[bytes] = None) -> dict:
     """
     解码 128-bit ATSIHID，返回各字段及签名校验结果。
 
+    32-bit 字段高 2 位为 0 时视为 IAM 编码（低 30 bits = 5 个 base64 字符），
+    否则视为传统 IPv4 地址。两种解读均返回，由调用方按需使用。
+
     Returns:
         {
             "app_id":     int,
             "time_ms":    int,      # 相对于 ATSIHID 纪元的毫秒数
             "time_unix":  float,    # Unix timestamp (秒)
             "seq":        int,
-            "ip":         str,      # "x.x.x.x"
-            "ip_int":     int,
+            "field32":    int,      # 原始 32-bit 值
+            "is_iam":     bool,     # 高 2 位为 0 → True（可能是 IAM）
+            "iam":        str,      # IAM 解读（去掉左侧 $ 补位）
+            "ip":         str,      # IP 解读 "x.x.x.x"
             "hmac_ok":    bool,     # 签名是否通过
         }
     """
@@ -182,7 +289,7 @@ def decode(uid: bytes, *, _key: Optional[bytes] = None) -> dict:
     # 还原: obs XOR
     obs = _hmac_sha256(key, t48.to_bytes(6, "big"))[:6]
     plain_tail = bytes(a ^ b for a, b in zip(obfuscated, obs))
-    ip32 = int.from_bytes(plain_tail[0:4], "big")
+    field32 = int.from_bytes(plain_tail[0:4], "big")
     hmac_got = plain_tail[4:6]
 
     # 重建 base_info 验签
@@ -190,19 +297,24 @@ def decode(uid: bytes, *, _key: Optional[bytes] = None) -> dict:
         app_id.to_bytes(2, "big")
         + t48.to_bytes(6, "big")
         + seq16.to_bytes(2, "big")
-        + ip32.to_bytes(4, "big")
+        + field32.to_bytes(4, "big")
     )
     hmac_expected = _hmac_sha256(key, base_info)[:2]
 
-    ip_str = f"{(ip32 >> 24) & 0xFF}.{(ip32 >> 16) & 0xFF}.{(ip32 >> 8) & 0xFF}.{ip32 & 0xFF}"
+    # 高 2 位为 0 → 可能是 IAM
+    is_iam = (field32 >> 30) == 0
+    iam_str = decode_iam_32(field32) if is_iam else ""
+    ip_str = f"{(field32 >> 24) & 0xFF}.{(field32 >> 16) & 0xFF}.{(field32 >> 8) & 0xFF}.{field32 & 0xFF}"
 
     return {
         "app_id": app_id,
         "time_ms": t48,
         "time_unix": (_EPOCH_MS + t48) / 1000.0,
         "seq": seq16,
+        "field32": field32,
+        "is_iam": is_iam,
+        "iam": iam_str,
         "ip": ip_str,
-        "ip_int": ip32,
         "hmac_ok": hmac.compare_digest(hmac_got, hmac_expected),
     }
 
@@ -301,7 +413,7 @@ def vanity(
     max_wall_seconds: Optional[float] = None,
     top_n: int = 20,
     _key: Optional[bytes] = None,
-    _ip: Optional[int] = None,
+    _iam32: Optional[int] = None,
 ) -> list[dict]:
     """在允许的时间范围内暴力搜索包含指定子串的 ATSIHID。
 
@@ -318,7 +430,7 @@ def vanity(
         max_wall_seconds: 最大墙钟搜索时间 (秒)，超时后返回已有最优结果。
                           None 表示不限制 (仅受 seconds 搜索空间限制)
         top_n:          未精确命中时返回的模糊候选数量 (默认 20)
-        _key/_ip:       测试用覆盖参数
+        _key/_iam32:    测试用覆盖参数
 
     Returns:
         命中列表，每项为 {"uid": bytes, "base64": str, "score": int}。
@@ -331,7 +443,7 @@ def vanity(
         raise ValueError("target 不能为空")
 
     key = _key if _key is not None else _load_key()
-    ip32 = _ip if _ip is not None else _load_ip()
+    ip32 = _iam32 if _iam32 is not None else _load_iam()
     t_start = time_origin_ms if time_origin_ms is not None else _now_ms()
 
     total_ms = int(seconds * 1000)
@@ -428,6 +540,7 @@ if __name__ == "__main__":
     info = decode(uid)
     print(f"ID (hex):    {uid.hex()}")
     print(f"ID (base64): {b64}")
+    print(f"IAM:         {info['iam']}")
     print(f"Decoded:     {info}")
 
     # round-trip
