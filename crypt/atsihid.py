@@ -11,6 +11,10 @@ Layout (128 bits, big-endian):
     HMAC_16 = HMAC-SHA256(key, App|Time|Seq|IP)[:2]  — 16-bit signature
 
 Epoch: 2026-04-01 00:00:00 UTC  (ms)
+
+Text encoding: custom base64 with ASCII-sorted alphabet
+    $0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_
+    Fixed 22-char output, left-padded with '$'. String sort == byte sort.
 """
 
 from __future__ import annotations
@@ -19,7 +23,6 @@ import hashlib
 import hmac
 import os
 import secrets
-import struct
 import sys
 import threading
 import time
@@ -34,9 +37,10 @@ _EPOCH_MS = _EPOCH_S * 1000
 _TIME48_MAX = (1 << 48) - 1
 _SEQ16_MAX = (1 << 16) - 1
 
-# Bitcoin base58 alphabet
-_B58_ALPHABET = b"123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
-_B58_MAP = {c: i for i, c in enumerate(_B58_ALPHABET)}
+# Custom base64 alphabet — ASCII-sorted so string comparison == byte comparison
+_B64_ALPHABET = "$0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_"
+_B64_MAP = {c: i for i, c in enumerate(_B64_ALPHABET)}
+_B64_LEN = 22  # ceil(128 / 6) = 22 chars for 128-bit ID
 
 # ── Internal helpers ─────────────────────────────────────────────────
 
@@ -124,8 +128,6 @@ def generate(app_id: int, *, sequential: bool = False,
     seq16 = _seq_counter.next() if sequential else secrets.randbelow(1 << 16)
 
     # ── 基础信息 (112 bits = 14 bytes) ──
-    base_info = struct.pack(">HQ", app_id, t48)[: 2 + 6]  # App_16 + Time_48 (取低6字节)
-    # 更精确的做法：手动拼
     base_info = (
         app_id.to_bytes(2, "big")
         + t48.to_bytes(6, "big")
@@ -205,54 +207,37 @@ def decode(uid: bytes, *, _key: Optional[bytes] = None) -> dict:
     }
 
 
-# ── Base58 ───────────────────────────────────────────────────────────
+# ── Base64 (custom alphabet) ─────────────────────────────────────────
 
 
-def to_base58(uid: bytes) -> str:
-    """128-bit ATSIHID → Base58 字符串 (Bitcoin alphabet)。"""
+def to_base64(uid: bytes) -> str:
+    """128-bit ATSIHID → 22-char base64 字符串 (自定义 ASCII 有序字母表)。
+
+    固定 22 字符，左补 '$'(值 0)，字符串字典序 == 字节大端序。
+    """
     if len(uid) != 16:
         raise ValueError(f"ATSIHID 必须是 16 bytes，收到 {len(uid)}")
 
     n = int.from_bytes(uid, "big")
-    if n == 0:
-        return _B58_ALPHABET[0:1].decode()
-
-    chars: list[int] = []
-    while n > 0:
-        n, r = divmod(n, 58)
-        chars.append(_B58_ALPHABET[r])
-    # 前导零字节 → 前导 '1'
-    for b in uid:
-        if b == 0:
-            chars.append(_B58_ALPHABET[0])
-        else:
-            break
-    return bytes(reversed(chars)).decode()
+    chars: list[str] = []
+    for _ in range(_B64_LEN):
+        n, r = divmod(n, 64)
+        chars.append(_B64_ALPHABET[r])
+    return "".join(reversed(chars))
 
 
-def from_base58(s: str) -> bytes:
-    """Base58 字符串 → 128-bit ATSIHID (16 bytes)。"""
+def from_base64(s: str) -> bytes:
+    """22-char base64 字符串 → 128-bit ATSIHID (16 bytes)。"""
+    if len(s) != _B64_LEN:
+        raise ValueError(f"base64 字符串必须是 {_B64_LEN} 字符，收到 {len(s)}")
+
     n = 0
-    for ch in s.encode():
-        if ch not in _B58_MAP:
-            raise ValueError(f"非法 Base58 字符: {chr(ch)}")
-        n = n * 58 + _B58_MAP[ch]
+    for ch in s:
+        if ch not in _B64_MAP:
+            raise ValueError(f"非法 base64 字符: {ch!r}")
+        n = n * 64 + _B64_MAP[ch]
 
-    # 前导 '1' → 前导零字节
-    leading_zeros = 0
-    for ch in s.encode():
-        if ch == _B58_ALPHABET[0]:
-            leading_zeros += 1
-        else:
-            break
-
-    raw = n.to_bytes((n.bit_length() + 7) // 8, "big") if n > 0 else b""
-    result = b"\x00" * leading_zeros + raw
-
-    # 填充或截断到 16 bytes
-    if len(result) > 16:
-        raise ValueError(f"Base58 解码结果超过 16 bytes: {len(result)}")
-    return result.rjust(16, b"\x00")
+    return n.to_bytes(16, "big")
 
 
 # ── Sorting ──────────────────────────────────────────────────────────
@@ -268,17 +253,184 @@ def sort(uids: list[bytes], *, reverse: bool = False) -> list[bytes]:
     return sorted(uids, key=sort_key, reverse=reverse)
 
 
+# ── Vanity search ───────────────────────────────────────────────────
+
+
+def _build_substring_table(needle: str, case_sensitive: bool) -> list[list[str]]:
+    """预计算 needle 的所有子串，按长度分组 (index 0 = length 1)。"""
+    if not case_sensitive:
+        needle = needle.lower()
+    table: list[list[str]] = []
+    for length in range(1, len(needle) + 1):
+        subs = []
+        for start in range(len(needle) - length + 1):
+            subs.append(needle[start:start + length])
+        table.append(subs)
+    return table
+
+
+def _fuzzy_score_fast(haystack: str, sub_table: list[list[str]], min_score: int) -> int:
+    """返回 needle 在 haystack 中最长连续匹配子串的长度。
+
+    只检查长度 > min_score 的子串（低于 min_score 的不值得入围）。
+    """
+    for length_idx in range(len(sub_table) - 1, min_score - 1, -1):
+        for sub in sub_table[length_idx]:
+            if sub in haystack:
+                return length_idx + 1  # length = index + 1
+    return 0
+
+
+def _int_to_base64(n: int) -> str:
+    """将 128-bit 整数转为 22-char base64 字符串 (内联优化版)。"""
+    alph = _B64_ALPHABET
+    chars = []
+    for _ in range(_B64_LEN):
+        chars.append(alph[n & 0x3F])
+        n >>= 6
+    return "".join(reversed(chars))
+
+
+def vanity(
+    app_id: int,
+    target: str,
+    *,
+    seconds: float = 1.0,
+    case_sensitive: bool = True,
+    time_origin_ms: Optional[int] = None,
+    max_wall_seconds: Optional[float] = None,
+    top_n: int = 20,
+    _key: Optional[bytes] = None,
+    _ip: Optional[int] = None,
+) -> list[dict]:
+    """在允许的时间范围内暴力搜索包含指定子串的 ATSIHID。
+
+    在固定 app_id 和时间起点的基础上，遍历 (秒+毫秒+seq) 的全部自由度，
+    寻找 base64 编码中包含 target 子串的 ID。
+
+    Args:
+        app_id:         16-bit 应用标识
+        target:         目标子串
+        seconds:        允许搜索的秒数（从 time_origin_ms 开始）
+        case_sensitive: 是否严格区分大小写
+        time_origin_ms: 搜索起始时间 (相对于 ATSIHID 纪元的毫秒数)，
+                        缺省取当前时间
+        max_wall_seconds: 最大墙钟搜索时间 (秒)，超时后返回已有最优结果。
+                          None 表示不限制 (仅受 seconds 搜索空间限制)
+        top_n:          未精确命中时返回的模糊候选数量 (默认 20)
+        _key/_ip:       测试用覆盖参数
+
+    Returns:
+        命中列表，每项为 {"uid": bytes, "base64": str, "score": int}。
+        score == len(target) 表示精确命中。
+        按 score 降序、base64 升序排列。
+    """
+    if not (0 <= app_id <= _SEQ16_MAX):
+        raise ValueError(f"app_id 超出范围 [0, 65535]: {app_id}")
+    if not target:
+        raise ValueError("target 不能为空")
+
+    key = _key if _key is not None else _load_key()
+    ip32 = _ip if _ip is not None else _load_ip()
+    t_start = time_origin_ms if time_origin_ms is not None else _now_ms()
+
+    total_ms = int(seconds * 1000)
+    target_len = len(target)
+    match_target = target if case_sensitive else target.lower()
+
+    exact_matches: list[dict] = []
+    # 模糊候选：保留 top_n 个最高分，(score, base64, uid_int)
+    fuzzy: list[tuple[int, str, int]] = []
+    fuzzy_min_score = 0
+
+    # 预计算子串表 (用于快速模糊匹配)
+    sub_table = _build_substring_table(target, case_sensitive)
+
+    # 预计算常量
+    app_hi = app_id << 112  # app_id 在 128-bit 中的位置
+    ip_bytes = ip32.to_bytes(4, "big")
+    wall_deadline = (time.monotonic() + max_wall_seconds) if max_wall_seconds else None
+
+    _hmac = _hmac_sha256
+    _to_b64 = _int_to_base64
+    _mono = time.monotonic
+
+    timed_out = False
+    for ms_offset in range(total_ms):
+        if timed_out:
+            break
+        t48 = t_start + ms_offset
+        if t48 < 0 or t48 > _TIME48_MAX:
+            continue
+
+        time_bytes = t48.to_bytes(6, "big")
+        obs = _hmac(key, time_bytes)[:6]
+        obs_ip = bytes(a ^ b for a, b in zip(ip_bytes, obs[:4]))
+        obs_ip_int = int.from_bytes(obs_ip, "big")
+        obs_tail_0 = obs[4]
+        obs_tail_1 = obs[5]
+
+        # uid 高 80 bits 中，app + time 部分是常量
+        prefix = app_hi | (t48 << 64)
+        # masked_ip 在 uid 的 bit[16..48] 区间
+        masked_ip_shifted = obs_ip_int << 16
+
+        app_time_bytes = app_id.to_bytes(2, "big") + time_bytes
+
+        for seq16 in range(1 << 16):
+            # 每 4096 次检查一次墙钟时间
+            if wall_deadline and (seq16 & 0xFFF) == 0 and _mono() >= wall_deadline:
+                timed_out = True
+                break
+
+            hmac_16 = _hmac(key, app_time_bytes + seq16.to_bytes(2, "big") + ip_bytes)[:2]
+            xored_hmac = (hmac_16[0] ^ obs_tail_0) << 8 | (hmac_16[1] ^ obs_tail_1)
+
+            uid_int = prefix | (seq16 << 48) | masked_ip_shifted | xored_hmac
+            b64 = _to_b64(uid_int)
+
+            haystack = b64 if case_sensitive else b64.lower()
+            if match_target in haystack:
+                uid = uid_int.to_bytes(16, "big")
+                exact_matches.append({
+                    "uid": uid, "base64": b64, "score": target_len,
+                })
+                if len(exact_matches) >= top_n:
+                    return exact_matches
+            elif len(fuzzy) < top_n or fuzzy_min_score < target_len:
+                score = _fuzzy_score_fast(haystack, sub_table, fuzzy_min_score)
+                if score > 0 and (len(fuzzy) < top_n or score > fuzzy_min_score):
+                    if len(fuzzy) < top_n:
+                        fuzzy.append((score, b64, uid_int))
+                        if len(fuzzy) == top_n:
+                            fuzzy.sort(key=lambda x: (-x[0], x[1]))
+                            fuzzy_min_score = fuzzy[-1][0]
+                    else:
+                        fuzzy[-1] = (score, b64, uid_int)
+                        fuzzy.sort(key=lambda x: (-x[0], x[1]))
+                        fuzzy_min_score = fuzzy[-1][0]
+
+    if exact_matches:
+        return exact_matches
+
+    fuzzy.sort(key=lambda x: (-x[0], x[1]))
+    return [
+        {"uid": uid_int.to_bytes(16, "big"), "base64": b64, "score": score}
+        for score, b64, uid_int in fuzzy
+    ]
+
+
 # ── CLI demo ─────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     uid = generate(app_id=1)
-    b58 = to_base58(uid)
+    b64 = to_base64(uid)
     info = decode(uid)
     print(f"ID (hex):    {uid.hex()}")
-    print(f"ID (base58): {b58}")
+    print(f"ID (base64): {b64}")
     print(f"Decoded:     {info}")
 
     # round-trip
-    assert from_base58(b58) == uid
+    assert from_base64(b64) == uid
     assert info["hmac_ok"]
     print("Round-trip OK")

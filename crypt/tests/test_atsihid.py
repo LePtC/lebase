@@ -3,7 +3,7 @@ import os
 import unittest
 
 from crypt.atsihid import (
-    generate, decode, to_base58, from_base58, sort,
+    generate, decode, to_base64, from_base64, sort, vanity,
     _EPOCH_MS,
 )
 
@@ -70,26 +70,50 @@ class TestDecode(unittest.TestCase):
         self.assertAlmostEqual(info["time_unix"], expected_unix, places=3)
 
 
-class TestBase58(unittest.TestCase):
+class TestBase64(unittest.TestCase):
     def test_roundtrip(self):
         uid = generate(1, _key=_TEST_KEY, _ip=_TEST_IP, _time_ms=_TEST_TIME)
-        b58 = to_base58(uid)
-        self.assertIsInstance(b58, str)
-        self.assertEqual(from_base58(b58), uid)
+        b64 = to_base64(uid)
+        self.assertIsInstance(b64, str)
+        self.assertEqual(len(b64), 22)
+        self.assertEqual(from_base64(b64), uid)
 
     def test_zero_id(self):
         uid = b"\x00" * 16
-        b58 = to_base58(uid)
-        self.assertEqual(from_base58(b58), uid)
+        b64 = to_base64(uid)
+        self.assertEqual(b64, "$" * 22)
+        self.assertEqual(from_base64(b64), uid)
 
     def test_max_id(self):
         uid = b"\xff" * 16
-        b58 = to_base58(uid)
-        self.assertEqual(from_base58(b58), uid)
+        b64 = to_base64(uid)
+        self.assertEqual(len(b64), 22)
+        self.assertEqual(from_base64(b64), uid)
+
+    def test_fixed_length(self):
+        # small value should still produce 22 chars
+        uid = b"\x00" * 15 + b"\x01"
+        b64 = to_base64(uid)
+        self.assertEqual(len(b64), 22)
+        self.assertTrue(b64.startswith("$"))
+        self.assertEqual(from_base64(b64), uid)
 
     def test_invalid_char(self):
         with self.assertRaises(ValueError):
-            from_base58("0OIl")  # these chars not in base58
+            from_base64("!" * 22)
+
+    def test_invalid_length(self):
+        with self.assertRaises(ValueError):
+            from_base64("abc")
+
+    def test_sort_order_preserved(self):
+        """字符串字典序应与字节大端序一致。"""
+        uids = [
+            generate(1, _key=_TEST_KEY, _ip=_TEST_IP, _time_ms=t)
+            for t in [1000, 2000, 3000]
+        ]
+        b64s = [to_base64(u) for u in uids]
+        self.assertEqual(b64s, sorted(b64s))
 
 
 class TestSort(unittest.TestCase):
@@ -112,6 +136,96 @@ class TestSort(unittest.TestCase):
         result = sort(uids, reverse=True)
         times = [int.from_bytes(u[2:8], "big") for u in result]
         self.assertEqual(times, sorted(times, reverse=True))
+
+
+class TestVanity(unittest.TestCase):
+    def test_exact_match(self):
+        """搜索 'LPC' 子串 (case-insensitive)，应在合理搜索空间内找到。"""
+        results = vanity(
+            app_id=1,
+            target="LPC",
+            seconds=5.0,
+            case_sensitive=False,
+            time_origin_ms=0,
+            max_wall_seconds=30,
+            _key=_TEST_KEY,
+            _ip=_TEST_IP,
+        )
+        self.assertTrue(len(results) > 0)
+        best = results[0]
+        self.assertEqual(best["score"], 3)
+        self.assertIn("lpc", best["base64"].lower())
+
+    def test_case_sensitive(self):
+        """case_sensitive=True 搜索短子串应能命中。"""
+        results = vanity(
+            app_id=1,
+            target="ab",
+            seconds=1.0,
+            case_sensitive=True,
+            time_origin_ms=0,
+            max_wall_seconds=10,
+            _key=_TEST_KEY,
+            _ip=_TEST_IP,
+        )
+        self.assertTrue(len(results) > 0)
+        best = results[0]
+        self.assertEqual(best["score"], 2)
+        self.assertIn("ab", best["base64"])
+
+    def test_fuzzy_fallback(self):
+        """极短搜索时间 + 长子串 → 应返回模糊候选。"""
+        results = vanity(
+            app_id=1,
+            target="ZZZZZZZZZZ",
+            seconds=0.01,
+            case_sensitive=True,
+            time_origin_ms=0,
+            max_wall_seconds=5,
+            _key=_TEST_KEY,
+            _ip=_TEST_IP,
+        )
+        self.assertTrue(len(results) > 0)
+        self.assertLess(results[0]["score"], 10)
+
+    def test_wall_timeout(self):
+        """max_wall_seconds 应限制搜索时间并返回已有结果。"""
+        import time as _time
+        t0 = _time.monotonic()
+        results = vanity(
+            app_id=1,
+            target="ZZZZZ",
+            seconds=100.0,
+            case_sensitive=True,
+            time_origin_ms=0,
+            max_wall_seconds=2,
+            _key=_TEST_KEY,
+            _ip=_TEST_IP,
+        )
+        elapsed = _time.monotonic() - t0
+        self.assertLess(elapsed, 5)  # 应在几秒内返回
+        self.assertTrue(len(results) > 0)
+
+    def test_empty_target_raises(self):
+        with self.assertRaises(ValueError):
+            vanity(app_id=1, target="", _key=_TEST_KEY, _ip=_TEST_IP)
+
+    def test_result_is_valid_atsihid(self):
+        """搜索结果应是合法的 ATSIHID (HMAC 校验通过)。"""
+        results = vanity(
+            app_id=1,
+            target="a",
+            seconds=0.1,
+            time_origin_ms=0,
+            max_wall_seconds=10,
+            _key=_TEST_KEY,
+            _ip=_TEST_IP,
+        )
+        self.assertTrue(len(results) > 0)
+        for r in results[:3]:
+            info = decode(r["uid"], _key=_TEST_KEY)
+            self.assertTrue(info["hmac_ok"])
+            self.assertEqual(info["app_id"], 1)
 
 
 if __name__ == "__main__":
